@@ -1,0 +1,22 @@
+
+
+build --cxxopt=-std=c++17
+build --cxxopt=-Wno-sign-compare
+build --cxxopt=-fpermissive
+build --cxxopt=-w
+build --cxxopt=-pthread
+build --copt=-pthread  # For c files that need to use pthreads. Such as ref.c in libvmaf.
+build --copt=-O3 # For performance.
+
+build --linkopt=-lm
+build --linkopt=-ldl
+build --linkopt=-pthread
+
+build --linkopt=-lpthread
+
+# Use the default C++ toolchain to build the tools used during the
+# build.
+build --host_crosstool_top=@bazel_tools//tools/cpp:toolchain
+
+#build:clang_toolchain --crosstool_top=//toolchain:clang_suite
+build:clang_toolchain --cpu=k8
