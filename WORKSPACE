@@ -1,3 +1,4 @@
+workspace(name = "ffvmaf")
 # FFmpeg
 load("//tools/workspace:default.bzl", "add_default_repositories")
 

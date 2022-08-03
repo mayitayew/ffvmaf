@@ -145,8 +145,7 @@ cc_library(
     name = "libvmaf_av",
     hdrs = ["libvmaf_av.h"],
     srcs = ["libvmaf_av.cc"],
-    deps = [":libvmaf",],
-   # linkopts = ["-lavcodec", "-lavformat", "-lavutil",],
+    deps = [":libvmaf", "@ffmpeg//:avutil_lib", "@ffmpeg//:avcodec_lib", "@ffmpeg//:avformat_lib", "@zlib",],
 )
 
 

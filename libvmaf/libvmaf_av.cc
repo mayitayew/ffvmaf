@@ -102,7 +102,7 @@ double ComputeVmafScore(const std::string& ref_video_url,
     AVCodecParameters* pLocalCodecParameters = NULL;
     pLocalCodecParameters = pFormatContext_for_reference->streams[i]->codecpar;
     AVCodec* pLocalCodec = NULL;
-    pLocalCodec = avcodec_find_decoder(pLocalCodecParameters->codec_id);
+    pLocalCodec = (AVCodec*) avcodec_find_decoder(pLocalCodecParameters->codec_id);
 
     if (pLocalCodec == NULL) {
       fprintf(stderr, "ERROR unsupported codec!\n");
