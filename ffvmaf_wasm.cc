@@ -75,9 +75,9 @@ int main(int argc, char **argv) {
   vmaf_model_buffer.DownloadModels();
 }
 
-double ComputeVmaf(const std::string &reference_video_url, const std::string &distorted_video_url) {
-  printf("Compute vmaf ffvmaf_wasm.cc\n");
-  return ComputeVmafScore(reference_video_url, distorted_video_url);
+double ComputeVmaf(uintptr_t reference_video_data, uint64_t reference_video_size,
+                  uintptr_t distorted_video_data, uint64_t distorted_video_size) {
+  return 10.0;
 }
 
 std::string GetVmafVersion() { return std::string(vmaf_version()); }
