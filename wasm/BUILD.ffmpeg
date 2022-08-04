@@ -1,5 +1,7 @@
 # -*- python -*-
 
+# FFMpeg bazel build file that's been edited for WASM builds.
+
 # Copyright 2018-2020 Josh Pieper, jjp@pobox.com.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -1452,12 +1454,11 @@ cc_library(
 ,
     srcs = [":libavformat"],
     includes = ["."],
-    deps = [":avutil_lib", ":avcodec_lib"],
+    deps = [":avutil_lib", ":avcodec_lib", "@boringssl//:ssl"],
 )
 
 cc_library(
     name = "libavformat",
-  #  linkshared = True,
     srcs = [
  'libavformat/isom.c',
  'libavformat/network.c',
@@ -1919,6 +1920,7 @@ cc_library(
         ":libavformat/libavformat.lds",
         "@bzip2",
         "@zlib",
+        "@boringssl//:ssl",
     ],
     linkopts = BIN_LINKOPTS + [
         "-Wl,--version-script,$(location libavformat/libavformat.lds)",

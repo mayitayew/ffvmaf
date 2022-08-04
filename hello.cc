@@ -8,6 +8,7 @@ extern "C" {
 #include <stdlib.h>
 #include <string.h>
 #include "libvmaf/libvmaf.h"
+#include "ffvmaf_lib.h"
 
 int main(int argc, const char* argv[]) {
   printf("initializing all the containers, codecs and protocols.\n");
@@ -21,4 +22,5 @@ int main(int argc, const char* argv[]) {
     return -1;
   }
   printf("FFmpeg Format Context allocated and VMAF's version is %s!.\n", vmaf_version());
+  ComputeVmafScore("ref.y4m", "dist.y4m");
 }

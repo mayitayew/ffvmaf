@@ -1,16 +1,11 @@
 <html>
 <head>
-    <script src="hello.js"></script>
-    <script>
-        Module.onRuntimeInitialized = _ => {
-            console.log("WebAssembly module loaded");
-        }
-    </script>
-    <title>WebRTC with custom codecs</title>
+    <title>FFVmaf wasm experiment</title>
 </head>
 
 <body>
-
-
+<script type="module" src="./index.js" async></script>
+<input type="file" id="input" />
+<button id="button">Upload</button>
 </body>
 </html>

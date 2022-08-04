@@ -30,3 +30,10 @@ git_repository(
     remote = "https://github.com/google/googletest.git",
     tag = "release-1.10.0",
 )
+
+# BoringSSL which replaces OpenSSL in FFmpeg.
+git_repository(
+    name = "boringssl",
+    commit = "348be81e950f86636cd51a8433510b64fd9064b7",
+    remote = "https://boringssl.googlesource.com/boringssl",
+)
