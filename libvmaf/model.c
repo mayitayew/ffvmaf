@@ -147,6 +147,11 @@ int vmaf_model_load_from_path(VmafModel **model, VmafModelConfig *cfg,
     return err;
 }
 
+int vmaf_model_load_from_buffer(VmafModel **model, VmafModelConfig *cfg,
+                                const char *data, const int data_len) {
+    return vmaf_read_json_model_from_buffer(model, cfg, data, data_len);
+}
+
 int vmaf_model_feature_overload(VmafModel *model, const char *feature_name,
                                 VmafFeatureDictionary *opts_dict)
 {
@@ -293,6 +298,16 @@ int vmaf_model_collection_load_from_path(VmafModel **model,
     }
 
     return err;
+}
+
+int vmaf_model_collection_load_from_buffer(VmafModel **model,
+                                      VmafModelCollection **model_collection,
+                                      VmafModelConfig *cfg,
+                                      const char *data,
+                                      const int data_len)
+{
+    return vmaf_read_json_model_collection_from_buffer(model, model_collection,
+                                                       cfg, data, data_len);
 }
 
 int vmaf_model_collection_feature_overload(VmafModel *model,

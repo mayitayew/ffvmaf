@@ -47,6 +47,9 @@ int vmaf_model_load(VmafModel **model, VmafModelConfig *cfg,
 int vmaf_model_load_from_path(VmafModel **model, VmafModelConfig *cfg,
                              const char *path);
 
+int vmaf_model_load_from_buffer(VmafModel **model, VmafModelConfig *cfg,
+                               const char *data, const int data_len);
+
 int vmaf_model_feature_overload(VmafModel *model, const char *feature_name,
                                VmafFeatureDictionary *opts_dict);
 
@@ -79,6 +82,12 @@ int vmaf_model_collection_load_from_path(VmafModel **model,
                                         VmafModelCollection **model_collection,
                                         VmafModelConfig *cfg,
                                         const char *path);
+
+int vmaf_model_collection_load_from_buffer(VmafModel **model,
+                                          VmafModelCollection **model_collection,
+                                          VmafModelConfig *cfg,
+                                          const char *data,
+                                          const int data_len);
 
 int vmaf_model_collection_feature_overload(VmafModel *model,
                                           VmafModelCollection **model_collection,

@@ -16,7 +16,7 @@ const input = document.getElementById('input');
 const button = document.getElementById('button');
 input.onchange = function() {
     const blobUrl = URL.createObjectURL(input.files[0]);
-    videoUrl = blobUrl.substring(blobUrl.indexOf('blob:') + 5);
+    videoUrl = "https://storage.googleapis.com/muxdemofiles/mux-video-intro.mp4";
 }
 
 button.onclick = function() {

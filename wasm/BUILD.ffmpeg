@@ -1898,6 +1898,8 @@ cc_library(
  'libavformat/os_support.c',
  'libavformat/qtpalette.c',
  'libavformat/protocols.c',
+ 'libavformat/tls.c',
+ 'libavformat/tls_openssl.c',
  'libavformat/sdp.c',
  'libavformat/url.c',
  'libavformat/utils.c',

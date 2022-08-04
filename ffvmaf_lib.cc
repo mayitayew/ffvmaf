@@ -1,8 +1,8 @@
 #include "ffvmaf_lib.h"
 extern "C" {
-#include "libvmaf/read_json_model.h"
 #include "libavcodec/avcodec.h"
 #include "libavformat/avformat.h"
+#include "libvmaf/libvmaf.h"
 }
 
 #include <string>
@@ -17,10 +17,10 @@ int InitalizeVmaf(VmafContext *vmaf,
       .name = "default_vmaf_model",
   };
 
-  if (vmaf_read_json_model_from_buffer(model, &model_config, model_buffer, model_buffer_size) != 0) {
+  if (vmaf_model_load_from_buffer(model, &model_config, model_buffer, model_buffer_size) != 0) {
     fprintf(stderr, "Reading json model from buffer failed. Attempting to read it as a model collection.\n");
 
-    if (vmaf_read_json_model_collection_from_buffer(model,
+    if (vmaf_model_collection_load_from_buffer(model,
                                                     model_collection,
                                                     &model_config,
                                                     model_buffer,

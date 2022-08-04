@@ -7,6 +7,7 @@ FFMPEG_DEPS = [
     "@ffmpeg//:avcodec_lib",
     "@ffmpeg//:avformat_lib",
     "@zlib",
+    "@boringssl//:ssl",
 ]
 
 cc_binary(
@@ -35,7 +36,7 @@ cc_library(
     name = "ffvmaf_lib",
     srcs = ["ffvmaf_lib.cc"],
     hdrs = ["ffvmaf_lib.h"],
-    deps = ["//libvmaf:libvmaf", "//libvmaf:read_json_model",] + FFMPEG_DEPS,
+    deps = ["//libvmaf:libvmaf"] + FFMPEG_DEPS,
 )
 
 cc_test(

@@ -2,8 +2,9 @@
 #define FFVMAF_LIB_H
 
 #include <string>
-
+extern "C" {
 #include "libvmaf/libvmaf.h"
+}
 
 int InitalizeVmaf(VmafContext *vmaf,
                   VmafModel **model,

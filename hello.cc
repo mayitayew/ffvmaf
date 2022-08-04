@@ -2,12 +2,12 @@
 extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
+#include "libvmaf/libvmaf.h"
 }
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "libvmaf/libvmaf.h"
 #include "ffvmaf_lib.h"
 
 int main(int argc, const char* argv[]) {
