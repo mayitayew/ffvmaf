@@ -20,6 +20,7 @@ input.onchange = function() {
 }
 
 button.onclick = function() {
-    ffModule.computeVmaf(videoUrl, videoUrl);
+    const score = ffModule.computeVmaf(videoUrl, videoUrl);
+    console.log('Vmaf score is ' + score);
 }
 

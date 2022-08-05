@@ -13,6 +13,7 @@ FFMPEG_DEPS = [
 cc_binary(
     name = "hello",
     srcs = ["hello.cc"],
+    data = ["//model:720p.mp4"],
     deps = ["//libvmaf:libvmaf", ":ffvmaf_lib"] + FFMPEG_DEPS,
 )
 

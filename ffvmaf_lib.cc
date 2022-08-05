@@ -7,6 +7,37 @@ extern "C" {
 
 #include <string>
 
+InMemoryAVIOContext::InMemoryAVIOContext(const char *buffer, uint64_t buffer_size)
+    : buffer_(buffer), buffer_size_(buffer_size), position_(0) {
+  output_buffer_size_ = 1>>15;
+  output_buffer_ = (uint8_t *) av_malloc(output_buffer_size_);
+  if (!output_buffer_) {
+    fprintf(stderr, "FATAL ERROR: Could not allocate output buffer.\n");
+  }
+  avio_ctx_ = avio_alloc_context(output_buffer_,
+                                 output_buffer_size_,
+                                 0,
+                                 this,
+                                 &InMemoryAVIOContext::read,
+                                 NULL,
+                                 NULL);
+}
+
+int InMemoryAVIOContext::read(void *opaque, uint8_t *buf, int buf_size) {
+  printf("InMemoryAVIOContext::read\n");
+  InMemoryAVIOContext *context = static_cast<InMemoryAVIOContext *>(opaque);
+  const int bytes_to_read = std::min((int) (context->buffer_size_ - context->position_), buf_size);
+  memcpy(buf, context->buffer_ + context->position_, bytes_to_read);
+  context->position_ += bytes_to_read;
+  printf("InMemoryAVIOContext::read: %d bytes read\n", bytes_to_read);
+  printf("InMemoryAVIOContext::read: %d bytes left\n", (int) (context->buffer_size_ - context->position_));
+  return bytes_to_read;
+}
+
+AVIOContext *InMemoryAVIOContext::GetAVIOContext() {
+  return avio_ctx_;
+}
+
 int InitalizeVmaf(VmafContext *vmaf,
                   VmafModel **model,
                   VmafModelCollection **model_collection,
@@ -21,10 +52,10 @@ int InitalizeVmaf(VmafContext *vmaf,
     fprintf(stderr, "Reading json model from buffer failed. Attempting to read it as a model collection.\n");
 
     if (vmaf_model_collection_load_from_buffer(model,
-                                                    model_collection,
-                                                    &model_config,
-                                                    model_buffer,
-                                                    model_buffer_size) != 0) {
+                                               model_collection,
+                                               &model_config,
+                                               model_buffer,
+                                               model_buffer_size) != 0) {
       fprintf(stderr, "Reading json model collection from buffer failed. Unable to read model.\n");
       return -1;
     }
@@ -47,60 +78,73 @@ int InitalizeVmaf(VmafContext *vmaf,
   return 0;
 }
 
-double ComputeVmafScore(const std::string& ref_video_url,
-                   const std::string& dist_video_url) {
-  printf("Compute vmaf score ffvmaf_lib.cc\n");
-  AVFormatContext* pFormatContext_for_reference = avformat_alloc_context();
+double ComputeVmafScore(const char *reference_video_buffer,
+                        uint64_t reference_video_buffer_size,
+                        const char *distorted_video_buffer,
+                        uint64_t distorted_video_buffer_size) {
+
+  printf("Computing VMAF score...\n");
+  InMemoryAVIOContext reference_video_context(reference_video_buffer, reference_video_buffer_size);
+  AVFormatContext *pFormatContext_for_reference = avformat_alloc_context();
   if (!pFormatContext_for_reference) {
     printf("ERROR could not allocate memory for Format Context\n");
     return -1;
   }
+  pFormatContext_for_reference->pb = reference_video_context.GetAVIOContext();
+  pFormatContext_for_reference->flags |= AVFMT_FLAG_CUSTOM_IO;
 
-  AVFormatContext* pFormatContext_for_distorted = avformat_alloc_context();
+  InMemoryAVIOContext distorted_video_context(distorted_video_buffer, distorted_video_buffer_size);
+  AVFormatContext *pFormatContext_for_distorted = avformat_alloc_context();
   if (!pFormatContext_for_distorted) {
     printf("ERROR could not allocate memory for Format Context\n");
     return -1;
   }
+  pFormatContext_for_distorted->pb = distorted_video_context.GetAVIOContext();
+  pFormatContext_for_distorted->flags |= AVFMT_FLAG_CUSTOM_IO;
 
-  avformat_network_init();
-  if (avformat_open_input(&pFormatContext_for_reference, ref_video_url.c_str(),
-                          NULL, NULL) != 0) {
-    printf("ERROR could not open reference video file from %s\n",
-           ref_video_url.c_str());
+  int err = avformat_open_input(&pFormatContext_for_reference, "",
+  NULL, NULL);
+  if (err < 0) {
+   // fprintf(stderr, "ERROR could not open reference video file. error_code: %s\n", av_err2str(err));
     return -1;
   }
+//
+//  printf("Opened reference video file.\n");
+//
+//  if (avformat_open_input(&pFormatContext_for_distorted, "unusedDistUrl",
+//                          NULL, NULL) != 0) {
+//    printf("ERROR could not open distorted video file from %s\n");
+//    return -1;
+//  }
 
-  if (avformat_open_input(&pFormatContext_for_distorted, dist_video_url.c_str(),
-                          NULL, NULL) != 0) {
-    printf("ERROR could not open distorted video file from %s\n",
-           dist_video_url.c_str());
-    return -1;
-  }
+  printf("Ready with input files with AVIOContexts.\n");
 
   if (avformat_find_stream_info(pFormatContext_for_reference, NULL) < 0) {
     printf("ERROR could not find stream information for reference video.\n");
     return -1;
   }
 
-  if (avformat_find_stream_info(pFormatContext_for_distorted, NULL) < 0) {
-    printf("ERROR could not find stream information for distorted video.\n");
-    return -1;
-  }
+//  if (avformat_find_stream_info(pFormatContext_for_distorted, NULL) < 0) {
+//    printf("ERROR could not find stream information for distorted video.\n");
+//    return -1;
+//  }
 
-  AVCodec* pCodec_for_reference = NULL;
-  AVCodecParameters* pCodecParameters_for_reference = NULL;
+  printf("Found stream info for refernce and distorted video. num_streams: %d \n",
+         pFormatContext_for_reference->nb_streams);
+  AVCodec *pCodec_for_reference = NULL;
+  AVCodecParameters *pCodecParameters_for_reference = NULL;
   int reference_video_stream_index = -1;
 
-  AVCodec* pCodec_for_distorted = NULL;
-  AVCodecParameters* pCodecParameters_for_distorted = NULL;
+  AVCodec *pCodec_for_distorted = NULL;
+  AVCodecParameters *pCodecParameters_for_distorted = NULL;
   int distorted_video_stream_index = -1;
 
   // Find the video stream and resolution for the reference video.
   for (int i = 0; i < pFormatContext_for_reference->nb_streams; i++) {
-    AVCodecParameters* pLocalCodecParameters = NULL;
+    AVCodecParameters *pLocalCodecParameters = NULL;
     pLocalCodecParameters = pFormatContext_for_reference->streams[i]->codecpar;
-    AVCodec* pLocalCodec = NULL;
-    pLocalCodec = (AVCodec*) avcodec_find_decoder(pLocalCodecParameters->codec_id);
+    AVCodec *pLocalCodec = NULL;
+    pLocalCodec = (AVCodec *) avcodec_find_decoder(pLocalCodecParameters->codec_id);
 
     if (pLocalCodec == NULL) {
       fprintf(stderr, "ERROR unsupported codec!\n");
@@ -128,36 +172,36 @@ double ComputeVmafScore(const std::string& ref_video_url,
   }
 
   // Find the video stream and resolution for the distorted video.
-  for (int i = 0; i < pFormatContext_for_distorted->nb_streams; i++) {
-    AVCodecParameters* pLocalCodecParameters = NULL;
-    pLocalCodecParameters = pFormatContext_for_distorted->streams[i]->codecpar;
-    AVCodec* pLocalCodec = NULL;
-    pLocalCodec = (AVCodec*) avcodec_find_decoder(pLocalCodecParameters->codec_id);
-
-    if (pLocalCodec == NULL) {
-      fprintf(stderr, "ERROR unsupported codec!\n");
-      return -1;
-    }
-
-    // when the stream is a video we store its index, codec parameters and codec
-    if (pLocalCodecParameters->codec_type == AVMEDIA_TYPE_VIDEO) {
-      if (reference_video_stream_index == -1) {
-        reference_video_stream_index = i;
-        pCodec_for_distorted = pLocalCodec;
-        pCodecParameters_for_distorted = pLocalCodecParameters;
-      }
-
-      printf("Distorted video Codec: resolution %d x %d\n",
-             pCodecParameters_for_distorted->width,
-             pCodecParameters_for_distorted->height);
-      break;
-    }
-  }
-
-  if (distorted_video_stream_index == -1) {
-    fprintf(stderr, "ERROR could not find video stream in distorted video.\n");
-    return -1;
-  }
+//  for (int i = 0; i < pFormatContext_for_distorted->nb_streams; i++) {
+//    AVCodecParameters *pLocalCodecParameters = NULL;
+//    pLocalCodecParameters = pFormatContext_for_distorted->streams[i]->codecpar;
+//    AVCodec *pLocalCodec = NULL;
+//    pLocalCodec = (AVCodec *) avcodec_find_decoder(pLocalCodecParameters->codec_id);
+//
+//    if (pLocalCodec == NULL) {
+//      fprintf(stderr, "ERROR unsupported codec!\n");
+//      return -1;
+//    }
+//
+//    // when the stream is a video we store its index, codec parameters and codec
+//    if (pLocalCodecParameters->codec_type == AVMEDIA_TYPE_VIDEO) {
+//      if (reference_video_stream_index == -1) {
+//        reference_video_stream_index = i;
+//        pCodec_for_distorted = pLocalCodec;
+//        pCodecParameters_for_distorted = pLocalCodecParameters;
+//      }
+//
+//      printf("Distorted video Codec: resolution %d x %d\n",
+//             pCodecParameters_for_distorted->width,
+//             pCodecParameters_for_distorted->height);
+//      break;
+//    }
+//  }
+//
+//  if (distorted_video_stream_index == -1) {
+//    fprintf(stderr, "ERROR could not find video stream in distorted video.\n");
+//    return -1;
+//  }
 
   return 10.0;
 }

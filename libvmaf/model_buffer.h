@@ -53,6 +53,10 @@ class VmafModelBuffer {
     download_count_++;
   }
 
+  bool HasModel(const std::string& model_name) const {
+    return fetches_by_name_.find(model_name) != fetches_by_name_.end();
+  }
+
   uint64_t GetBufferSize(const std::string& model_name) const {
     emscripten_fetch_t* fetch =
         static_cast<emscripten_fetch_t*>(fetches_by_name_[model_name]);

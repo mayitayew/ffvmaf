@@ -9,6 +9,7 @@ extern "C" {
 #include <stdlib.h>
 #include <string.h>
 #include "ffvmaf_lib.h"
+#include "libvmaf/runfiles_util.h"
 
 int main(int argc, const char* argv[]) {
   printf("initializing all the containers, codecs and protocols.\n");
@@ -22,5 +23,12 @@ int main(int argc, const char* argv[]) {
     return -1;
   }
   printf("FFmpeg Format Context allocated and VMAF's version is %s!.\n", vmaf_version());
-  ComputeVmafScore("ref.y4m", "dist.y4m");
+
+  char buffer[2500000];
+  const std::string model =
+      tools::GetModelRunfilesPath(argv[0]) + "720p.mp4";
+  FILE* f1 = fopen(model.c_str(), "rb");
+  uint32_t bytes = fread(buffer, sizeof(char), 2500000, f1);
+
+  ComputeVmafScore(buffer, bytes, buffer, bytes);
 }

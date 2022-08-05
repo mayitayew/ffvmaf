@@ -33,6 +33,13 @@ void downloadSucceeded(emscripten_fetch_t *fetch) {
                   vmaf_model_buffer.GetBuffer("vmaf_v0.6.1neg.json"),
                   vmaf_model_buffer.GetBufferSize("vmaf_v0.6.1neg.json"));
   }
+  if (vmaf_model_buffer.HasModel("reference_video")) {
+    printf("Finished downloading reference_video! Computing VMAF!!\n");
+    ComputeVmafScore(vmaf_model_buffer.GetBuffer("reference_video"),
+                     vmaf_model_buffer.GetBufferSize("reference_video"),
+                     vmaf_model_buffer.GetBuffer("reference_video"),
+                     vmaf_model_buffer.GetBufferSize("reference_video"));
+  }
 }
 
 void downloadFailed(emscripten_fetch_t *fetch) {
@@ -75,8 +82,14 @@ int main(int argc, char **argv) {
   vmaf_model_buffer.DownloadModels();
 }
 
-double ComputeVmaf(uintptr_t reference_video_data, uint64_t reference_video_size,
-                  uintptr_t distorted_video_data, uint64_t distorted_video_size) {
+//double ComputeVmaf(uintptr_t reference_video_data, uint64_t reference_video_size,
+//                  uintptr_t distorted_video_data, uint64_t distorted_video_size) {
+//  const char* reference_video_buffer = reinterpret_cast<const char*>(reference_video_data);
+//  const char* distorted_video_buffer = reinterpret_cast<const char*>(distorted_video_data);
+
+
+double ComputeVmaf(const std::string &reference_video_url, const std::string &distorted_video_url) {
+  asyncDownload(reference_video_url, "reference_video");
   return 10.0;
 }
 
