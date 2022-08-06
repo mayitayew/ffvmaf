@@ -9,7 +9,7 @@ extern "C" {
 
 InMemoryAVIOContext::InMemoryAVIOContext(const char *buffer, uint64_t buffer_size)
     : buffer_(buffer), buffer_size_(buffer_size), position_(0) {
-  output_buffer_size_ = 1>>15;
+  output_buffer_size_ = 1>>16;
   output_buffer_ = (uint8_t *) av_malloc(output_buffer_size_);
   if (!output_buffer_) {
     fprintf(stderr, "FATAL ERROR: Could not allocate output buffer.\n");
@@ -18,9 +18,7 @@ InMemoryAVIOContext::InMemoryAVIOContext(const char *buffer, uint64_t buffer_siz
                                  output_buffer_size_,
                                  0,
                                  this,
-                                 &InMemoryAVIOContext::read,
-                                 NULL,
-                                 NULL);
+                                 &InMemoryAVIOContext::read, NULL, &InMemoryAVIOContext::seek);
 }
 
 int InMemoryAVIOContext::read(void *opaque, uint8_t *buf, int buf_size) {
@@ -32,6 +30,17 @@ int InMemoryAVIOContext::read(void *opaque, uint8_t *buf, int buf_size) {
   printf("InMemoryAVIOContext::read: %d bytes read\n", bytes_to_read);
   printf("InMemoryAVIOContext::read: %d bytes left\n", (int) (context->buffer_size_ - context->position_));
   return bytes_to_read;
+}
+
+int64_t InMemoryAVIOContext::seek(void *opaque, int64_t offset, int whence) {
+   printf("seek\n");
+   InMemoryAVIOContext *context = static_cast<InMemoryAVIOContext *>(opaque);
+   if (offset + whence > context->buffer_size_) {
+       context->position_ = context->buffer_size_;
+       return -1;
+   }
+   context->position_ = offset + whence;
+   return 0;
 }
 
 AVIOContext *InMemoryAVIOContext::GetAVIOContext() {
