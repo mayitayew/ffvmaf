@@ -3,7 +3,7 @@
 
 #include <string>
 extern "C" {
-#include "libvmaf/libvmaf.h"
+#include "libvmaf/src/libvmaf.h"
 #include "libavformat/avformat.h"
 }
 

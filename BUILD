@@ -6,8 +6,8 @@ FFMPEG_DEPS = [
     "@ffmpeg//:avutil_lib",
     "@ffmpeg//:avcodec_lib",
     "@ffmpeg//:avformat_lib",
-    "@ffmpeg//:swresample_lib",
-    "@ffmpeg//:swscale_lib",
+  #  "@ffmpeg//:swresample_lib",
+  #  "@ffmpeg//:swscale_lib",
     "@zlib",
     "@boringssl//:ssl",
 ]
@@ -37,9 +37,8 @@ cc_binary(
     name = "basic_from_file",
     srcs = ["basic_from_file.cc"],
     data = ["//libvmaf/model:720p.mp4"],
-    deps = ["//libvmaf/src:libvmaf",],
-    #+ FFMPEG_DEPS,
-    linkopts = SYSTEM_FFMPEG_LINKOPTS,
+    deps = ["//libvmaf/src:libvmaf"] + FFMPEG_DEPS,
+    #linkopts = SYSTEM_FFMPEG_LINKOPTS,
 )
 
 wasm_cc_binary(

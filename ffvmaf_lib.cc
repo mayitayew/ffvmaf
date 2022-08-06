@@ -2,7 +2,7 @@
 extern "C" {
 #include "libavcodec/avcodec.h"
 #include "libavformat/avformat.h"
-#include "libvmaf/libvmaf.h"
+#include "libvmaf/src/libvmaf.h"
 }
 
 #include <string>
