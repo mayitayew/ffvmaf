@@ -218,7 +218,6 @@ cc_library(
 
 cc_library(
     name = "libavutil",
-   # linkshared = True,
     srcs = [
  'libavutil/hwcontext_cuda.c',
  'libavutil/lzo.c',
@@ -331,6 +330,7 @@ generate_file(
 
 cc_library(
     name = "swscale_lib",
+    linkstatic=1,
     hdrs = [
  'libswscale/swscale.h',
  'libswscale/version.h',
@@ -341,9 +341,8 @@ cc_library(
     deps = [":avutil_lib"],
 )
 
-cc_binary(
+cc_library(
     name = "libswscale",
-   # linkshared = True,
     srcs = [
  'libswscale/log2_tab.c',
  'libswscale/alphablend.c',
@@ -405,7 +404,6 @@ cc_library(
 
 cc_library(
     name = "libswresample",
-   # linkshared = True,
     srcs = [
  'libswresample/log2_tab.c',
  'libswresample/audioconvert.c',

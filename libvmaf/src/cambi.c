@@ -20,14 +20,14 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "common/macros.h"
+#include "libvmaf/common/macros.h"
 #include "cpu.h"
 #include "feature_collector.h"
 #include "feature_extractor.h"
 #include "log.h"
 #include "luminance_tools.h"
 #include "mem.h"
-#include "feature/mkdirp.h"
+#include "libvmaf/feature/mkdirp.h"
 #include "picture.h"
 
 #if ARCH_X86

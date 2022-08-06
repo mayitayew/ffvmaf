@@ -111,10 +111,15 @@ double ComputeVmafScore(const char *reference_video_buffer,
   pFormatContext_for_distorted->pb = distorted_video_context.GetAVIOContext();
   pFormatContext_for_distorted->flags |= AVFMT_FLAG_CUSTOM_IO;
 
+  AVInputFormat *iformat_for_reference = const_cast<AVInputFormat *>(av_find_input_format("mp4"));
+  if (!iformat_for_reference) {
+    printf("ERROR could not find input format\n");
+    return -1;
+  }
   int err = avformat_open_input(&pFormatContext_for_reference, "",
-  NULL, NULL);
+                                iformat_for_reference, NULL);
   if (err < 0) {
-   // fprintf(stderr, "ERROR could not open reference video file. error_code: %s\n", av_err2str(err));
+    fprintf(stderr, "ERROR could not open reference video file. error_code: %s\n", "ak");
     return -1;
   }
 //

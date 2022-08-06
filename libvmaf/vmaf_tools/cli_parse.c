@@ -7,9 +7,9 @@
 
 #include "cli_parse.h"
 
-#include "libvmaf/feature.h"
-#include "libvmaf/libvmaf.h"
-#include "libvmaf/model.h"
+#include "libvmaf/src/feature.h"
+#include "libvmaf/src/libvmaf.h"
+#include "libvmaf/src/model.h"
 
 static const char short_opts[] = "r:d:w:h:p:b:m:c:o:nvq";
 

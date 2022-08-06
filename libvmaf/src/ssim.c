@@ -26,9 +26,9 @@
 #include <math.h>
 
 #include "mem.h"
-#include "iqa/math_utils.h"
-#include "iqa/decimate.h"
-#include "iqa/ssim_tools.h"
+#include "libvmaf/iqa/math_utils.h"
+#include "libvmaf/iqa/decimate.h"
+#include "libvmaf/iqa/ssim_tools.h"
 
 /* _ssim_map */
 int _ssim_map(const struct _ssim_int *si, void *ctx)

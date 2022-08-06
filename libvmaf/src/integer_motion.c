@@ -21,7 +21,7 @@
 #include <string.h>
 
 #include "cpu.h"
-#include "common/alignment.h"
+#include "libvmaf/common/alignment.h"
 #include "dict.h"
 #include "feature_collector.h"
 #include "feature_extractor.h"

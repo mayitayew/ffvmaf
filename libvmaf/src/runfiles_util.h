@@ -15,7 +15,7 @@ inline std::string GetModelRunfilesPath() {
     std::cerr << "FATAL: Runfiles error. " << error << std::endl;
     exit(EXIT_FAILURE);
   }
-  return rfiles->Rlocation("libvmaf_av/model/");
+  return rfiles->Rlocation("ffvmaf/libvmaf/model/");
 }
 
 inline std::string GetModelRunfilesPathForTest() {
@@ -29,7 +29,7 @@ inline std::string GetModelRunfilesPath(const std::string& arg0) {
     std::cerr << "FATAL: Runfiles error. " << error << std::endl;
     exit(EXIT_FAILURE);
   }
-  return rfiles->Rlocation("libvmaf_av/model/");
+  return rfiles->Rlocation("ffvmaf/libvmaf/model/");
 }
 
 inline std::string GetTestdataRunfilesPath() {
@@ -39,7 +39,7 @@ inline std::string GetTestdataRunfilesPath() {
     std::cerr << "FATAL: Runfiles error. " << error << std::endl;
     exit(EXIT_FAILURE);
   }
-  return rfiles->Rlocation("libvmaf_av/model/");
+  return rfiles->Rlocation("ffvmaf/libvmaf/model/");
 }
 
 // This version is for non-test binaries.
@@ -50,7 +50,7 @@ inline std::string GetTestdataRunfilesPath(const std::string& arg0) {
     std::cerr << "FATAL: Runfiles error. " << error << std::endl;
     exit(EXIT_FAILURE);
   }
-  return rfiles->Rlocation("libvmaf_av/model/");
+  return rfiles->Rlocation("ffvmaf/libvmaf/model/");
 }
 
 }  // namespace tools

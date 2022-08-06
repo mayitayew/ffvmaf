@@ -23,7 +23,7 @@
 
 #include "cpu.h"
 #include "dict.h"
-#include "common/macros.h"
+#include "libvmaf/common/macros.h"
 #include "feature_collector.h"
 #include "feature_extractor.h"
 #include "feature_name.h"

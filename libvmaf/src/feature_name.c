@@ -23,7 +23,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "feature/alias.h"
+#include "libvmaf/feature/alias.h"
 #include "dict.h"
 #include "feature_name.h"
 #include "opt.h"

@@ -20,7 +20,7 @@
 #include <math.h>
 #include <stdio.h>
 
-#include "feature/alias.h"
+#include "libvmaf/feature/alias.h"
 #include "feature_collector.h"
 
 #include "libvmaf.h"

@@ -24,10 +24,10 @@
 #include "feature_extractor.h"
 
 #include "mem.h"
-#include "ms_ssim.h"
-#include "feature/picture_copy.h"
+#include "ssim.h"
+#include "libvmaf/feature/picture_copy.h"
 
-typedef struct MsSsimState {
+typedef struct SsimState {
     size_t float_stride;
     float *ref;
     float *dist;
@@ -35,27 +35,27 @@ typedef struct MsSsimState {
     bool enable_db;
     bool clip_db;
     double max_db;
-} MsSsimState;
+} SsimState;
 
 static const VmafOption options[] = {
     {
         .name = "enable_lcs",
         .help = "enable luminance, contrast and structure intermediate output",
-        .offset = offsetof(MsSsimState, enable_lcs),
+        .offset = offsetof(SsimState, enable_lcs),
         .type = VMAF_OPT_TYPE_BOOL,
         .default_val.b = false,
     },
     {
         .name = "enable_db",
-        .help = "write MS-SSIM values as dB",
-        .offset = offsetof(MsSsimState, enable_db),
+        .help = "write SSIM values as dB",
+        .offset = offsetof(SsimState, enable_db),
         .type = VMAF_OPT_TYPE_BOOL,
         .default_val.b = false,
     },
     {
         .name = "clip_db",
         .help = "clip dB scores",
-        .offset = offsetof(MsSsimState, clip_db),
+        .offset = offsetof(SsimState, clip_db),
         .type = VMAF_OPT_TYPE_BOOL,
         .default_val.b = false,
     },
@@ -67,7 +67,7 @@ static int init(VmafFeatureExtractor *fex, enum VmafPixelFormat pix_fmt,
 {
     (void) pix_fmt;
 
-    MsSsimState *s = fex->priv;
+    SsimState *s = fex->priv;
 
     const unsigned peak = (1 << bpc) - 1;
     if (s->clip_db) {
@@ -103,7 +103,7 @@ static int extract(VmafFeatureExtractor *fex,
                    VmafPicture *dist_pic, VmafPicture *dist_pic_90,
                    unsigned index, VmafFeatureCollector *feature_collector)
 {
-    MsSsimState *s = fex->priv;
+    SsimState *s = fex->priv;
     int err = 0;
 
     (void) ref_pic_90;
@@ -112,50 +112,24 @@ static int extract(VmafFeatureExtractor *fex,
     picture_copy(s->ref, s->float_stride, ref_pic, 0, ref_pic->bpc);
     picture_copy(s->dist, s->float_stride, dist_pic, 0, dist_pic->bpc);
 
-    double score, l_scores[5], c_scores[5], s_scores[5];
-    err = compute_ms_ssim(s->ref, s->dist, ref_pic->w[0], ref_pic->h[0],
-                          s->float_stride, s->float_stride,
-                          &score, l_scores, c_scores, s_scores);
+    double score, l_score, c_score, s_score;
+    err = compute_ssim(s->ref, s->dist, ref_pic->w[0], ref_pic->h[0],
+                       s->float_stride, s->float_stride,
+                       &score, &l_score, &c_score, &s_score);
     if (err) return err;
 
     if (s->enable_db)
         score = convert_to_db(score, s->max_db);
 
-    err = vmaf_feature_collector_append(feature_collector, "float_ms_ssim",
+    err = vmaf_feature_collector_append(feature_collector, "float_ssim",
                                         score, index);
     if (s->enable_lcs) {
-        err |= vmaf_feature_collector_append(feature_collector,
-                "float_ms_ssim_l_scale0", l_scores[0], index);
-        err |= vmaf_feature_collector_append(feature_collector,
-                "float_ms_ssim_l_scale1", l_scores[1], index);
-        err |= vmaf_feature_collector_append(feature_collector,
-                "float_ms_ssim_l_scale2", l_scores[2], index);
-        err |= vmaf_feature_collector_append(feature_collector,
-                "float_ms_ssim_l_scale3", l_scores[3], index);
-        err |= vmaf_feature_collector_append(feature_collector,
-                "float_ms_ssim_l_scale4", l_scores[4], index);
-
-        err |= vmaf_feature_collector_append(feature_collector,
-                "float_ms_ssim_c_scale0", c_scores[0], index);
-        err |= vmaf_feature_collector_append(feature_collector,
-                "float_ms_ssim_c_scale1", c_scores[1], index);
-        err |= vmaf_feature_collector_append(feature_collector,
-                "float_ms_ssim_c_scale2", c_scores[2], index);
-        err |= vmaf_feature_collector_append(feature_collector,
-                "float_ms_ssim_c_scale3", c_scores[3], index);
-        err |= vmaf_feature_collector_append(feature_collector,
-                "float_ms_ssim_c_scale4", c_scores[4], index);
-
-        err |= vmaf_feature_collector_append(feature_collector,
-                "float_ms_ssim_s_scale0", s_scores[0], index);
-        err |= vmaf_feature_collector_append(feature_collector,
-                "float_ms_ssim_s_scale1", s_scores[1], index);
-        err |= vmaf_feature_collector_append(feature_collector,
-                "float_ms_ssim_s_scale2", s_scores[2], index);
-        err |= vmaf_feature_collector_append(feature_collector,
-                "float_ms_ssim_s_scale3", s_scores[3], index);
-        err |= vmaf_feature_collector_append(feature_collector,
-                "float_ms_ssim_s_scale4", s_scores[4], index);
+        err |= vmaf_feature_collector_append(feature_collector, "float_ssim_l",
+                                            l_score, index);
+        err |= vmaf_feature_collector_append(feature_collector, "float_ssim_c",
+                                            c_score, index);
+        err |= vmaf_feature_collector_append(feature_collector, "float_ssim_s",
+                                            s_score, index);
     }
 
     return err;
@@ -163,23 +137,23 @@ static int extract(VmafFeatureExtractor *fex,
 
 static int close(VmafFeatureExtractor *fex)
 {
-    MsSsimState *s = fex->priv;
+    SsimState *s = fex->priv;
     if (s->ref) aligned_free(s->ref);
     if (s->dist) aligned_free(s->dist);
     return 0;
 }
 
 static const char *provided_features[] = {
-    "float_ms_ssim",
+    "float_ssim",
     NULL
 };
 
-VmafFeatureExtractor vmaf_fex_float_ms_ssim = {
-    .name = "float_ms_ssim",
+VmafFeatureExtractor vmaf_fex_float_ssim = {
+    .name = "float_ssim",
     .init = init,
     .extract = extract,
     .options = options,
     .close = close,
-    .priv_size = sizeof(MsSsimState),
+    .priv_size = sizeof(SsimState),
     .provided_features = provided_features,
 };

@@ -11,13 +11,17 @@
 # WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION
 # OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
 # CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE. */
-
 load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
 load(
     ":BUILD.generated.bzl",
     "crypto_headers",
     "crypto_internal_headers",
     "crypto_sources",
+    "crypto_sources_apple_aarch64",
+    "crypto_sources_apple_x86_64",
+    "crypto_sources_linux_aarch64",
+    "crypto_sources_linux_ppc64le",
+    "crypto_sources_linux_x86_64",
     "fips_fragments",
     "ssl_headers",
     "ssl_internal_headers",
@@ -25,11 +29,8 @@ load(
     "tool_headers",
     "tool_sources",
 )
-
 licenses(["notice"])
-
 exports_files(["LICENSE"])
-
 config_setting(
     name = "linux_aarch64",
     constraint_values = [
@@ -37,7 +38,6 @@ config_setting(
         "@platforms//cpu:aarch64",
     ],
 )
-
 config_setting(
     name = "linux_x86_64",
     constraint_values = [
@@ -45,7 +45,6 @@ config_setting(
         "@platforms//cpu:x86_64",
     ],
 )
-
 config_setting(
     name = "linux_ppc64le",
     constraint_values = [
@@ -53,7 +52,6 @@ config_setting(
         "@platforms//cpu:ppc",
     ],
 )
-
 config_setting(
     name = "macos_aarch64",
     constraint_values = [
@@ -61,7 +59,6 @@ config_setting(
         "@platforms//cpu:aarch64",
     ],
 )
-
 config_setting(
     name = "macos_x86_64",
     constraint_values = [
@@ -69,12 +66,10 @@ config_setting(
         "@platforms//cpu:x86_64",
     ],
 )
-
 posix_copts = [
     # Assembler option --noexecstack adds .note.GNU-stack to each object to
     # ensure that binaries can be built with non-executable stack.
     "-Wa,--noexecstack",
-
     # This list of warnings should match those in the top-level CMakeLists.txt.
     "-Wall",
     "-Werror",
@@ -85,31 +80,35 @@ posix_copts = [
     "-Wshadow",
     "-fno-common",
 ]
-
 linux_copts = posix_copts + [
     # This is needed on Linux systems (at least) to get rwlock in pthread, but
     # it should not be set on Apple platforms, where it instead disables APIs
     # we use. See compat(5) and sys/cdefs.h.
     "-D_XOPEN_SOURCE=700",
 ]
-
 boringssl_copts = select({
     "@platforms//os:linux": linux_copts,
     "@platforms//os:macos": posix_copts,
     "@platforms//os:windows": ["-DWIN32_LEAN_AND_MEAN"],
     "//conditions:default": [],
 })
-
 # These selects must be kept in sync.
+#crypto_sources_asm = select({
+#    ":linux_aarch64": crypto_sources_linux_aarch64,
+#    ":linux_ppc64le": crypto_sources_linux_ppc64le,
+#    ":linux_x86_64": crypto_sources_linux_x86_64,
+#    ":macos_aarch64": crypto_sources_apple_aarch64,
+#    ":macos_x86_64": crypto_sources_apple_x86_64,
+#    "//conditions:default": [],
+#})
 boringssl_copts += select({
     ":linux_aarch64": [],
     ":linux_ppc64le": [],
-    ":linux_x86_64": [],
+    ":linux_x86_64": ["-DOPENSSL_NO_ASM"],
     ":macos_aarch64": [],
     ":macos_x86_64": [],
     "//conditions:default": ["-DOPENSSL_NO_ASM"],
 })
-
 # For C targets only (not C++), compile with C11 support.
 posix_copts_c11 = [
     "-std=c11",
@@ -117,25 +116,21 @@ posix_copts_c11 = [
     "-Wold-style-definition",
     "-Wstrict-prototypes",
 ]
-
 boringssl_copts_c11 = boringssl_copts + select({
     "@platforms//os:linux": posix_copts_c11,
     "@platforms//os:macos": posix_copts_c11,
     "//conditions:default": [],
 })
-
 # For C++ targets only (not C), compile with C++14 support.
 posix_copts_cxx = [
     "-std=c++14",
     "-Wmissing-declarations",
 ]
-
 boringssl_copts_cxx = boringssl_copts + select({
     "@platforms//os:linux": posix_copts_cxx,
     "@platforms//os:macos": posix_copts_cxx,
     "//conditions:default": [],
 })
-
 cc_library(
     name = "crypto",
     srcs = crypto_sources + crypto_internal_headers,
@@ -152,7 +147,6 @@ cc_library(
     }),
     visibility = ["//visibility:public"],
 )
-
 cc_library(
     name = "ssl",
     srcs = ssl_sources + ssl_internal_headers,
@@ -164,7 +158,6 @@ cc_library(
         ":crypto",
     ],
 )
-
 cc_binary(
     name = "bssl",
     srcs = tool_sources + tool_headers,

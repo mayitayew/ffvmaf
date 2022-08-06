@@ -25,7 +25,7 @@ cc_library(
     name = "feature_name",
     srcs = ["feature_name.c"],
     hdrs = ["feature_name.h"],
-    deps = ["//feature:alias",
+    deps = ["//libvmaf/feature:alias",
     ":dict",
     ":opt"],
 )
@@ -58,19 +58,19 @@ cc_library(
     hdrs = ["feature_extractor.h"],
     deps = [":feature_name",
     ":feature_collector",
-    "//feature:picture_copy",
+    "//libvmaf/feature:picture_copy",
     ":ms_ssim",
     ":dict",
     ":integer_adm_header",
     ":integer_motion_header",
     ":integer_vif_header",
-    "//common:macros",
-    "//common:alignment",
+    "//libvmaf/common:macros",
+    "//libvmaf/common:alignment",
     ":cpu",
     ":picture_interface",
     ":opt",
     ":ssim",
-    "//feature:mkdirp",
+    "//libvmaf/feature:mkdirp",
     ":luminance_tools",
     ":picture",
     ":log"],
@@ -80,7 +80,7 @@ cc_binary(
     name = "hello",
     srcs = ["hello.cc"],
     deps = [":runfiles_util", "@com_github_mjbots_bazel_deps//:everything"],
-    data = ["//model:720p.mp4", "//model:ref.yuv"],
+    data = ["//libvmaf/model:720p.mp4", "//libvmaf/model:ref.yuv"],
     #linkopts = ["-lavcodec", "-lavformat", "-lavutil",],
 )
 
@@ -173,7 +173,7 @@ cc_library(
     name = "ms_ssim",
     hdrs = ["ms_ssim.h"],
     srcs = ["ms_ssim.c"],
-    deps = [":mem", "//iqa:decimate", "//iqa:math_utils", "//iqa:ssim_tools",],
+    deps = [":mem", "//libvmaf/iqa:decimate", "//libvmaf/iqa:math_utils", "//libvmaf/iqa:ssim_tools",],
 )
 
 cc_library(
@@ -216,7 +216,7 @@ cc_library(
     name = "output",
     hdrs = ["output.h"],
     srcs = ["output.c"],
-    deps = [":feature_collector", "//feature:alias", ":libvmaf_header"]
+    deps = [":feature_collector", "//libvmaf/feature:alias", ":libvmaf_header"]
 )
 
 cc_library(
@@ -240,7 +240,7 @@ cc_library(
     deps = [":mem",
     ":model",
     ":dict",
-    "//feature:alias",
+    "//libvmaf/feature:alias",
     ":feature_extractor",
     ":feature_collector",
     ":feature_name",
@@ -290,7 +290,7 @@ cc_library(
     name = "ssim",
     srcs = ["ssim.c"],
     hdrs = ["ssim.h"],
-    deps = ["//iqa:math_utils", "//iqa:decimate", "//iqa:ssim_tools", ":mem"],
+    deps = ["//libvmaf/iqa:math_utils", "//libvmaf/iqa:decimate", "//libvmaf/iqa:ssim_tools", ":mem"],
 )
 
 cc_library(

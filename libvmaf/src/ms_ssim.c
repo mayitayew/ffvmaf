@@ -26,9 +26,9 @@
 #include <math.h>
 
 #include "mem.h"
-#include "iqa/math_utils.h"
-#include "iqa/decimate.h"
-#include "iqa/ssim_tools.h"
+#include "libvmaf/iqa/math_utils.h"
+#include "libvmaf/iqa/decimate.h"
+#include "libvmaf/iqa/ssim_tools.h"
 
 /* Low-pass filter for down-sampling (9/7 biorthogonal wavelet filter) */
 #define LPF_LEN 9

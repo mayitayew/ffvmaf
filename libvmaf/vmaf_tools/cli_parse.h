@@ -4,9 +4,9 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "libvmaf/libvmaf.h"
-#include "libvmaf/model.h"
-#include "libvmaf/feature.h"
+#include "libvmaf/src/libvmaf.h"
+#include "libvmaf/src/model.h"
+#include "libvmaf/src/feature.h"
 
 #define CLI_SETTINGS_STATIC_ARRAY_LEN 32
 
