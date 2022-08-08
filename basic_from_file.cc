@@ -34,9 +34,10 @@ void AvFunc(const std::string& name) {
 int main(int argc, const char* argv[]) {
   printf("initializing all the containers, codecs and protocols.\n");
 
+  av_register_all();
   AVCodec* h264 = (AVCodec*) avcodec_find_decoder(AV_CODEC_ID_MPEG4);
   if (h264 == NULL) {
-    printf("*****ERROR: h264 codec not found******\n");
+    printf("*****ERROR: h264 decoder not found******\n");
   } else {
     printf("*********h264 codec found**********\n");
   }

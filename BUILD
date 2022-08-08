@@ -6,9 +6,8 @@ FFMPEG_DEPS = [
     "@ffmpeg//:avutil_lib",
     "@ffmpeg//:avcodec_lib",
     "@ffmpeg//:avformat_lib",
-  #  "@ffmpeg//:swresample_lib",
-  #  "@ffmpeg//:swscale_lib",
     "@zlib",
+    "@bzip2",
     "@boringssl//:ssl",
 ]
 

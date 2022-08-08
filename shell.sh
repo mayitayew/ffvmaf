@@ -1,8 +1,8 @@
-dir=/home/michael/src/libvmaf_av/libavutil
+dir=/home/michael/src/ffvmaf/x264/encoder/
 re_c="*.c"
 re_h="*.h"
 for entry in "$dir"/*
-   do echo \"$(basename "$entry")\""," 
+   do echo \"encoder/$(basename "$entry")\"","
 done
 
 
