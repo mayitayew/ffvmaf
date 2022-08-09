@@ -2,6 +2,7 @@ package(default_visibility=["//visibility:public"])
 
 exports_files([
     "720p.mp4",
+    "mux.mp4",
     "sample.mp4",
     "ref.yuv",
     "vmaf_4k_v0.6.1.json",

@@ -3,8 +3,8 @@
 #include <string>
 
 #include <cstring>
-#include "libvmaf/libvmaf.h"
-#include "libvmaf/model_buffer.h"
+#include "libvmaf/src/libvmaf.h"
+#include "libvmaf/src/model_buffer.h"
 #include "ffvmaf_lib.h"
 
 /* Declare VMAF specific global variables including pointers to an initialized VMAF context and model. */

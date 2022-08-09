@@ -35,7 +35,7 @@ wasm_cc_binary(
 cc_binary(
     name = "basic_from_file",
     srcs = ["basic_from_file.cc"],
-    data = ["//libvmaf/model:720p.mp4"],
+    data = ["//libvmaf/model:720p.mp4", "//libvmaf/model:mux.mp4"],
     deps = ["//libvmaf/src:libvmaf"] + FFMPEG_DEPS,
     #linkopts = SYSTEM_FFMPEG_LINKOPTS,
 )
@@ -60,8 +60,7 @@ cc_library(
     name = "ffvmaf_lib",
     srcs = ["ffvmaf_lib.cc"],
     hdrs = ["ffvmaf_lib.h"],
-    deps = ["//libvmaf/src:libvmaf"]
-    #+ FFMPEG_DEPS,
+    deps = ["//libvmaf/src:libvmaf"] + FFMPEG_DEPS,
 )
 
 cc_test(

@@ -9,7 +9,7 @@ extern "C" {
 
 InMemoryAVIOContext::InMemoryAVIOContext(const char *buffer, uint64_t buffer_size)
     : buffer_(buffer), buffer_size_(buffer_size), position_(0) {
-  output_buffer_size_ = 1>>16;
+  output_buffer_size_ = 1<<16;
   output_buffer_ = (uint8_t *) av_malloc(output_buffer_size_);
   if (!output_buffer_) {
     fprintf(stderr, "FATAL ERROR: Could not allocate output buffer.\n");
@@ -93,6 +93,7 @@ double ComputeVmafScore(const char *reference_video_buffer,
                         uint64_t distorted_video_buffer_size) {
 
   printf("Computing VMAF score...\n");
+  av_register_all();
   InMemoryAVIOContext reference_video_context(reference_video_buffer, reference_video_buffer_size);
   AVFormatContext *pFormatContext_for_reference = avformat_alloc_context();
   if (!pFormatContext_for_reference) {
@@ -119,7 +120,7 @@ double ComputeVmafScore(const char *reference_video_buffer,
   int err = avformat_open_input(&pFormatContext_for_reference, "",
                                 iformat_for_reference, NULL);
   if (err < 0) {
-    fprintf(stderr, "ERROR could not open reference video file. error_code: %s\n", "ak");
+    fprintf(stderr, "ERROR could not open reference video file. error_code: %s\n", av_err2str(err));
     return -1;
   }
 //
