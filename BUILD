@@ -35,9 +35,15 @@ wasm_cc_binary(
 cc_binary(
     name = "basic_from_file",
     srcs = ["basic_from_file.cc"],
-    data = ["//libvmaf/model:720p.mp4", "//libvmaf/model:mux.mp4"],
-    deps = ["//libvmaf/src:libvmaf"] + FFMPEG_DEPS,
-    #linkopts = SYSTEM_FFMPEG_LINKOPTS,
+    data = ["//libvmaf/model:mux_modified.mp4", "//libvmaf/model:mux.mp4", "//libvmaf/model:vmaf_v0.6.1neg.json"],
+    deps = ["//libvmaf/src:libvmaf", ":ffvmaf_lib",] + FFMPEG_DEPS,
+)
+
+cc_binary(
+    name = "basic",
+    srcs = ["basic.cc"],
+    data = ["//libvmaf/model:720p.mp4", "//libvmaf/model:mux.mp4", "//libvmaf/model:vmaf_v0.6.1neg.json"],
+    deps = ["//libvmaf/src:libvmaf", ":ffvmaf_lib",] + FFMPEG_DEPS,
 )
 
 wasm_cc_binary(
@@ -48,8 +54,8 @@ wasm_cc_binary(
 WASM_LINKOPTS = [
  "--bind",
  "-sFETCH",
- "-sEXPORT_ES6=1",
- "-sMODULARIZE=1",
+# "-sEXPORT_ES6=1",
+# "-sMODULARIZE=1",
  "-sEXPORT_ALL=1",
  "-sALLOW_MEMORY_GROWTH=1",
  "-sNO_EXIT_RUNTIME=1",

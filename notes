@@ -1,0 +1,6 @@
+** Vmaf commandline invocation
+============================================================
+../bazel-bin/vmaf_tools/vmaf -r "/home/michael/src/libav_vmaf/model/ref.yuv" -d
+"/home/michael/src/libav_vmaf/model/dist.yuv" -h 1080 -w 1920 -p 420 -b 8 -o "/home/michael/src/libav_vmaf/model/out.json"
+--json -m "path=/home/michael/src/libav_vmaf/model/vmaf_v0.6.1.json" --threads 1
+

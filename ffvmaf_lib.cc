@@ -74,7 +74,8 @@ int InitalizeVmaf(VmafContext *vmaf,
       return -1;
     }
 
-    *model_collection_count++;
+    printf("Incrmenting model collection count.\n");
+    *model_collection_count = *model_collection_count + 1;
   }
 
   // Register the feature extractors required by the model.
@@ -120,7 +121,7 @@ double ComputeVmafScore(const char *reference_video_buffer,
   int err = avformat_open_input(&pFormatContext_for_reference, "",
                                 iformat_for_reference, NULL);
   if (err < 0) {
-    fprintf(stderr, "ERROR could not open reference video file. error_code: %s\n", av_err2str(err));
+    fprintf(stderr, "ERROR could not open reference video file. error_code: %s\n", "unknown");
     return -1;
   }
 //
@@ -185,38 +186,6 @@ double ComputeVmafScore(const char *reference_video_buffer,
     fprintf(stderr, "ERROR could not find video stream in reference video.\n");
     return -1;
   }
-
-  // Find the video stream and resolution for the distorted video.
-//  for (int i = 0; i < pFormatContext_for_distorted->nb_streams; i++) {
-//    AVCodecParameters *pLocalCodecParameters = NULL;
-//    pLocalCodecParameters = pFormatContext_for_distorted->streams[i]->codecpar;
-//    AVCodec *pLocalCodec = NULL;
-//    pLocalCodec = (AVCodec *) avcodec_find_decoder(pLocalCodecParameters->codec_id);
-//
-//    if (pLocalCodec == NULL) {
-//      fprintf(stderr, "ERROR unsupported codec!\n");
-//      return -1;
-//    }
-//
-//    // when the stream is a video we store its index, codec parameters and codec
-//    if (pLocalCodecParameters->codec_type == AVMEDIA_TYPE_VIDEO) {
-//      if (reference_video_stream_index == -1) {
-//        reference_video_stream_index = i;
-//        pCodec_for_distorted = pLocalCodec;
-//        pCodecParameters_for_distorted = pLocalCodecParameters;
-//      }
-//
-//      printf("Distorted video Codec: resolution %d x %d\n",
-//             pCodecParameters_for_distorted->width,
-//             pCodecParameters_for_distorted->height);
-//      break;
-//    }
-//  }
-//
-//  if (distorted_video_stream_index == -1) {
-//    fprintf(stderr, "ERROR could not find video stream in distorted video.\n");
-//    return -1;
-//  }
 
   return 10.0;
 }

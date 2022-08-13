@@ -2,14 +2,14 @@
 extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
-#include "libvmaf/libvmaf.h"
+#include "libvmaf/src/libvmaf.h"
 }
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "ffvmaf_lib.h"
-#include "libvmaf/runfiles_util.h"
+#include "libvmaf/src/runfiles_util.h"
 
 int main(int argc, const char* argv[]) {
   printf("initializing all the containers, codecs and protocols.\n");

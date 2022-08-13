@@ -2,6 +2,7 @@
 extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
+#include "libvmaf/src/libvmaf.h"
 }
 #include <stdarg.h>
 #include <stdio.h>
@@ -9,229 +10,250 @@ extern "C" {
 #include <string.h>
 
 #include <iostream>
+#include "ffvmaf_lib.h"
 
 #include "libvmaf/src/runfiles_util.h"
 
-static int decode_packet(AVPacket* pPacket, AVCodecContext* pCodecContext,
-                         AVFrame* pFrame);
-// save a frame into a .pgm file
-static void save_gray_frame(unsigned char* buf, int wrap, int xsize, int ysize,
-                            char* filename);
+static int decode_packet(AVPacket *ref_pPacket,
+                         AVCodecContext *ref_pCodecContext,
+                         AVFrame *ref_pFrame,
+                         AVPacket *dist_pPacket,
+                         AVCodecContext *dist_pCodecContext,
+                         AVFrame *dist_pFrame,
+                         int *frame_index);
 
-void AvFunc(const std::string& name) {
-  AVFormatContext* pFormatContext = avformat_alloc_context();
-  if (!pFormatContext) {
-    printf("ERROR could not allocate memory for Format Context\n");
-    return;
+/* Declare VMAF specific global variables including pointers to an initialized VMAF context and model. */
+VmafConfiguration cfg = {
+    .log_level = VMAF_LOG_LEVEL_INFO,
+};
+VmafContext *vmaf;
+VmafModel **model;
+VmafModelConfig model_config = {
+    .name = "current_model",
+};
+VmafModelCollection **model_collection;
+uint64_t model_collection_count;
+
+int InitializeVmafEntities() {
+  int err = vmaf_init(&vmaf, cfg);
+  if (err) {
+    fprintf(stderr, "Failed to initialize VMAF context. error code: %d\n", err);
+    return -1;
   }
 
-  if (avformat_open_input(&pFormatContext, name.c_str(), NULL, NULL) != 0) {
-    printf("ERROR could not open the file\n");
-    return;
-  }
+  // Prepare the vmaf model object.
+  const size_t model_sz = sizeof(*model);
+  model = (VmafModel **) malloc(model_sz);
+  memset(model, 0, model_sz);
+
+  // Prepare the vmaf model collection object.
+  const size_t model_collection_sz = sizeof(*model_collection);
+  model_collection = (VmafModelCollection **) malloc(model_sz);
+  memset(model_collection, 0, model_collection_sz);
+  model_collection_count = 0;
+  return 0;
 }
 
-int main(int argc, const char* argv[]) {
-  printf("initializing all the containers, codecs and protocols.\n");
+int main(int argc, const char *argv[]) {
 
+  if (InitializeVmafEntities() < 0) {
+    return -1;
+  }
+
+  // Read model into buffer and initialize VMAF.
+  char buffer[2500000];
+  const std::string model_filepath =
+      tools::GetModelRunfilesPath(argv[0]) + "vmaf_v0.6.1neg.json";
+  FILE *f1 = fopen(model_filepath.c_str(), "rb");
+  uint32_t bytes = fread(buffer, sizeof(char), 250000, f1);
+  InitalizeVmaf(vmaf, model, model_collection, &model_collection_count, buffer, bytes);
+
+  printf("Initializing AV side of things - containers, codecs and protocols.\n");
   av_register_all();
-  // AVFormatContext holds the header information from the format (Container)
-  // Allocating memory for this component
-  // http://ffmpeg.org/doxygen/trunk/structAVFormatContext.html
-  AVFormatContext* pFormatContext = avformat_alloc_context();
-  if (!pFormatContext) {
+  AVFormatContext *ref_pFormatContext = avformat_alloc_context();
+  if (!ref_pFormatContext) {
     printf("ERROR could not allocate memory for Format Context\n");
     return -1;
   }
 
-  AVInputFormat *iformat_for_reference = const_cast<AVInputFormat *>(av_find_input_format("mp4"));
-  if (!iformat_for_reference) {
-    printf("*******ERROR could not find input format*******\n");
-  } else {
-    printf("*******SUCCESS found input format*******\n");
+  AVFormatContext *dist_pFormatContext = avformat_alloc_context();
+  if (!dist_pFormatContext) {
+    printf("ERROR could not allocate memory for Format Context\n");
+    return -1;
   }
 
-  // Open the file and read its header. The codecs are not opened.
-  // The function arguments are:
-  // AVFormatContext (the component we allocated memory for),
-  // url (filename),
-  // AVInputFormat (if you pass NULL it'll do the auto detect)
-  // and AVDictionary (which are options to the demuxer)
-  // http://ffmpeg.org/doxygen/trunk/group__lavf__decoding.html#ga31d601155e9035d5b0e7efedc894ee49
-  const std::string filepath = "file:" + tools::GetModelRunfilesPath(argv[0]) + "mux.mp4";
-  fprintf(stderr, "filepath: %s\n", filepath.c_str());
-  if (avformat_open_input(&pFormatContext, filepath.c_str(), NULL, NULL) != 0) {
+  const std::string ref_filepath = "file:" + tools::GetModelRunfilesPath(argv[0]) + "mux.mp4";
+  if (avformat_open_input(&ref_pFormatContext, ref_filepath.c_str(), NULL, NULL) != 0) {
     printf("ERROR could not open the file\n");
     return -1;
   }
 
-  // now we have access to some information about our file
-  // since we read its header we can say what format (container) it's
-  // and some other information related to the format itself.
-  printf("format %s, duration %lld us, bit_rate %lld\n",
-         pFormatContext->iformat->name, pFormatContext->duration,
-         pFormatContext->bit_rate);
-
-  printf("finding stream info from format\n");
-  // read Packets from the Format to get stream information
-  // this function populates pFormatContext->streams
-  // (of size equals to pFormatContext->nb_streams)
-  // the arguments are:
-  // the AVFormatContext
-  // and options contains options for codec corresponding to i-th stream.
-  // On return each dictionary will be filled with options that were not found.
-  // https://ffmpeg.org/doxygen/trunk/group__lavf__decoding.html#gad42172e27cddafb81096939783b157bb
-  if (avformat_find_stream_info(pFormatContext, NULL) < 0) {
+  if (avformat_find_stream_info(ref_pFormatContext, NULL) < 0) {
     printf("ERROR could not get the stream info\n");
     return -1;
   }
 
-  // the component that knows how to enCOde and DECode the stream
-  // it's the codec (audio or video)
-  // http://ffmpeg.org/doxygen/trunk/structAVCodec.html
-  AVCodec* pCodec = NULL;
-  // this component describes the properties of a codec used by the stream i
-  // https://ffmpeg.org/doxygen/trunk/structAVCodecParameters.html
-  AVCodecParameters* pCodecParameters = NULL;
-  int video_stream_index = -1;
-
-  // loop though all the streams and print its main information
-  for (int i = 0; i < pFormatContext->nb_streams; i++) {
-    AVCodecParameters* pLocalCodecParameters = NULL;
-    pLocalCodecParameters = pFormatContext->streams[i]->codecpar;
-//    printf("AVStream->time_base before open coded %d/%d\n",
-//           pFormatContext->streams[i]->time_base.num,
-//           pFormatContext->streams[i]->time_base.den);
-//    printf("AVStream->r_frame_rate before open coded %d/%d\n",
-//           pFormatContext->streams[i]->r_frame_rate.num,
-//           pFormatContext->streams[i]->r_frame_rate.den);
-//    printf("AVStream->start_time %" PRId64,
-//           pFormatContext->streams[i]->start_time);
-//    printf("\n");
-//    printf("AVStream->duration %" PRId64, pFormatContext->streams[i]->duration);
-//    printf("\n");
-//
-//    printf("finding the proper decoder (CODEC)\n");
-
-    AVCodec* pLocalCodec = NULL;
-
-    // finds the registered decoder for a codec ID
-    // https://ffmpeg.org/doxygen/trunk/group__lavc__decoding.html#ga19a0ca553277f019dd5b0fec6e1f9dca
-    pLocalCodec = (AVCodec*) avcodec_find_decoder(pLocalCodecParameters->codec_id);
-
-    if (pLocalCodec == NULL) {
-      printf("ERROR unsupported codec!\n");
-      // In this example if the codec is not found we just skip it
-      continue;
-    }
-
-    // when the stream is a video we store its index, codec parameters and codec
-    if (pLocalCodecParameters->codec_type == AVMEDIA_TYPE_VIDEO) {
-      if (video_stream_index == -1) {
-        video_stream_index = i;
-        pCodec = pLocalCodec;
-        pCodecParameters = pLocalCodecParameters;
-      }
-
-//      printf("Video Codec: resolution %d x %d\n", pLocalCodecParameters->width,
-//             pLocalCodecParameters->height);
-    } else if (pLocalCodecParameters->codec_type == AVMEDIA_TYPE_AUDIO) {
-//      printf("Audio Codec: %d channels, sample rate %d\n",
-//             pLocalCodecParameters->channels,
-//             pLocalCodecParameters->sample_rate);
-    }
-
-//    // print its name, id and bitrate
-//    printf("\tCodec %s ID %d bit_rate %lld\n", pLocalCodec->name,
-//           pLocalCodec->id, pLocalCodecParameters->bit_rate);
+  const std::string dist_filepath = "file:" + tools::GetModelRunfilesPath(argv[0]) + "mux_modified.mp4";
+  if (avformat_open_input(&dist_pFormatContext, dist_filepath.c_str(), NULL, NULL) != 0) {
+    printf("ERROR could not open the file\n");
+    return -1;
   }
 
-  if (video_stream_index == -1) {
+  if (avformat_find_stream_info(dist_pFormatContext, NULL) < 0) {
+    printf("ERROR could not get the stream info\n");
+    return -1;
+  }
+
+  AVCodec *ref_pCodec = NULL;
+  AVCodec *dist_pCodec = NULL;
+  AVCodecParameters *ref_pCodecParameters = NULL;
+  AVCodecParameters *dist_pCodecParameters = NULL;
+  int ref_video_stream_index = -1;
+  int dist_video_stream_index = -1;
+
+  for (int i = 0; i < ref_pFormatContext->nb_streams; i++) {
+    AVCodecParameters *pLocalCodecParameters = NULL;
+    pLocalCodecParameters = ref_pFormatContext->streams[i]->codecpar;
+    AVCodec *pLocalCodec = NULL;
+    pLocalCodec = (AVCodec *) avcodec_find_decoder(pLocalCodecParameters->codec_id);
+    if (pLocalCodec == NULL) {
+      printf("ERROR unsupported codec!\n");
+      continue;
+    }
+    if (pLocalCodecParameters->codec_type == AVMEDIA_TYPE_VIDEO) {
+      if (ref_video_stream_index == -1) {
+        ref_video_stream_index = i;
+        printf("Reference video stream index is %d\n", ref_video_stream_index);
+        ref_pCodec = pLocalCodec;
+        ref_pCodecParameters = pLocalCodecParameters;
+        break;
+      }
+    }
+  }
+
+  for (int i = 0; i < dist_pFormatContext->nb_streams; i++) {
+    AVCodecParameters *pLocalCodecParameters = NULL;
+    pLocalCodecParameters = dist_pFormatContext->streams[i]->codecpar;
+    AVCodec *pLocalCodec = NULL;
+    pLocalCodec = (AVCodec *) avcodec_find_decoder(pLocalCodecParameters->codec_id);
+    if (pLocalCodec == NULL) {
+      printf("ERROR unsupported codec!\n");
+      continue;
+    }
+    if (pLocalCodecParameters->codec_type == AVMEDIA_TYPE_VIDEO) {
+      if (dist_video_stream_index == -1) {
+        dist_video_stream_index = i;
+        printf("Distorted video stream index is %d\n", dist_video_stream_index);
+        dist_pCodec = pLocalCodec;
+        dist_pCodecParameters = pLocalCodecParameters;
+        break;
+      }
+    }
+  }
+
+  // Once video stream is found, initialize codec context, frame and packet.
+  if (ref_video_stream_index == -1 || dist_video_stream_index == -1) {
     printf("File %s does not contain a video stream!\n", "sample.mp4");
     return -1;
   }
 
-  AVCodecContext* pCodecContext = avcodec_alloc_context3(pCodec);
-  if (!pCodecContext) {
+  AVCodecContext *ref_pCodecContext = avcodec_alloc_context3(ref_pCodec);
+  AVCodecContext *dist_pCodecContext = avcodec_alloc_context3(dist_pCodec);
+  if (!ref_pCodecContext || !dist_pCodecContext) {
     printf("failed to allocated memory for AVCodecContext\n");
     return -1;
   }
-
-  // Fill the codec context based on the values from the supplied codec
-  // parameters
-  // https://ffmpeg.org/doxygen/trunk/group__lavc__core.html#gac7b282f51540ca7a99416a3ba6ee0d16
-  if (avcodec_parameters_to_context(pCodecContext, pCodecParameters) < 0) {
+  printf("Finished initializing codec contexts.\n");
+  if (avcodec_parameters_to_context(ref_pCodecContext, ref_pCodecParameters) < 0
+      || avcodec_parameters_to_context(dist_pCodecContext, dist_pCodecParameters) < 0) {
     printf("failed to copy codec params to codec context\n");
     return -1;
   }
 
-  // Initialize the AVCodecContext to use the given AVCodec.
-  // https://ffmpeg.org/doxygen/trunk/group__lavc__core.html#ga11f785a188d7d9df71621001465b0f1d
-  if (avcodec_open2(pCodecContext, pCodec, NULL) < 0) {
+  if (avcodec_open2(ref_pCodecContext, ref_pCodec, NULL) < 0
+      || avcodec_open2(dist_pCodecContext, dist_pCodec, NULL) < 0) {
     printf("failed to open codec through avcodec_open2\n");
     return -1;
   }
 
-  // https://ffmpeg.org/doxygen/trunk/structAVFrame.html
-  AVFrame* pFrame = av_frame_alloc();
-  if (!pFrame) {
+  AVFrame *ref_pFrame = av_frame_alloc();
+  AVFrame *dist_pFrame = av_frame_alloc();
+  if (!ref_pFrame || !dist_pFrame) {
     printf("failed to allocate memory for AVFrame\n");
     return -1;
   }
-  // https://ffmpeg.org/doxygen/trunk/structAVPacket.html
-  AVPacket* pPacket = av_packet_alloc();
-  if (!pPacket) {
+  AVPacket *ref_pPacket = av_packet_alloc();
+  AVPacket *dist_pPacket = av_packet_alloc();
+  if (!ref_pPacket || !dist_pPacket) {
     printf("failed to allocate memory for AVPacket\n");
     return -1;
   }
 
   int response = 0;
-  int how_many_packets_to_process = 10;
+  int how_many_packets_to_process = 100;
+  printf("Ready to start processing frames\n");
+  int vmaf_picture_index = 0;
+  while (av_read_frame(ref_pFormatContext, ref_pPacket) >= 0) {
 
-  // fill the Packet with data from the Stream
-  // https://ffmpeg.org/doxygen/trunk/group__lavf__decoding.html#ga4fdb3084415a82e3810de6ee60e46a61
-  while (av_read_frame(pFormatContext, pPacket) >= 0) {
+  } av_read_frame(dist_pFormatContext, ref_pPacket) >= 0) {
     // if it's the video stream
-    if (pPacket->stream_index == video_stream_index) {
-      printf("AVPacket->pts %" PRId64, pPacket->pts);
-      printf("\n");
-      response = decode_packet(pPacket, pCodecContext, pFrame);
+    if (ref_pPacket->stream_index == ref_video_stream_index) {
+      response = decode_packet(ref_pPacket,
+                               ref_pCodecContext,
+                               ref_pFrame,
+                               dist_pPacket,
+                               dist_pCodecContext,
+                               dist_pFrame,
+                               &vmaf_picture_index);
       if (response < 0) break;
-      // stop it, otherwise we'll be saving hundreds of frames
-      printf("Pixel format %d\n", pFrame->format);
 
       if (--how_many_packets_to_process <= 0) break;
     }
-    // https://ffmpeg.org/doxygen/trunk/group__lavc__packet.html#ga63d5a489b419bd5d45cfd09091cbcbc2
-    av_packet_unref(pPacket);
+    av_packet_unref(ref_pPacket);
   }
 
-  printf("releasing all the resources\n");
+  // Compute vmaf score.
+  double score;
+  int err = vmaf_score_pooled(vmaf, model[0], VMAF_POOL_METHOD_MEAN,
+                              &score, 0, 90);
+  printf("THE COMPUTED VMAF SCORE IS at index %d is %f\n", 90, score);
 
-  avformat_close_input(&pFormatContext);
-  av_packet_free(&pPacket);
-  av_frame_free(&pFrame);
-  avcodec_free_context(&pCodecContext);
+
+
+  // Flush vmaf context.
+  vmaf_read_pictures(vmaf, NULL, NULL, 0);
+  printf("Releasing VMAF resources.\n");
+  vmaf_model_destroy(model[0]);
+  vmaf_model_collection_destroy(model_collection[0]);
+  vmaf_close(vmaf);
+  printf("releasing all AV the resources\n");
+  avformat_close_input(&ref_pFormatContext);
+  avformat_close_input(&dist_pFormatContext);
+  av_packet_free(&ref_pPacket);
+  av_frame_free(&ref_pFrame);
+
+  av_packet_free(&dist_pPacket);
+  av_frame_free(&dist_pFrame);
+
+  avcodec_free_context(&ref_pCodecContext);
+  avcodec_free_context(&dist_pCodecContext);
   return 0;
 }
 
-static int decode_packet(AVPacket* pPacket, AVCodecContext* pCodecContext,
-                         AVFrame* pFrame) {
-  // Supply raw packet data as input to a decoder
-  // https://ffmpeg.org/doxygen/trunk/group__lavc__decoding.html#ga58bc4bf1e0ac59e27362597e467efff3
-  int response = avcodec_send_packet(pCodecContext, pPacket);
-
+static int decode_packet(AVPacket *ref_pPacket, AVCodecContext *ref_pCodecContext,
+                         AVFrame *ref_pFrame, AVPacket *dist_pPacket, AVCodecContext *dist_pCodecContext,
+                         AVFrame *dist_pFrame, int *frame_index) {
+  int response = avcodec_send_packet(ref_pCodecContext, ref_pPacket);
   if (response < 0) {
-    printf("Error while sending a packet to the decoder: ");
+    printf("Error while sending a ref packet to the decoder: ");
     printf("\n");
     return response;
   }
 
   while (response >= 0) {
-    // Return decoded output data (into a frame) from a decoder
-    // https://ffmpeg.org/doxygen/trunk/group__lavc__decoding.html#ga11e6542c4e66d3028668788a1a74217c
-    response = avcodec_receive_frame(pCodecContext, pFrame);
+    response = avcodec_receive_frame(ref_pCodecContext, ref_pFrame);
     if (response == AVERROR(EAGAIN) || response == AVERROR_EOF) {
+      printf("Done receiving frame.\n");
       break;
     } else if (response < 0) {
       printf("Error while receiving a frame from the decoder: ");
@@ -240,47 +262,82 @@ static int decode_packet(AVPacket* pPacket, AVCodecContext* pCodecContext,
     }
 
     if (response >= 0) {
-      printf(
-          "Frame %d (type=%c, size=%d bytes, format=%d) pts %d key_frame %d "
-          "[DTS %d]",
-          pCodecContext->frame_number,
-          av_get_picture_type_char(pFrame->pict_type), pFrame->pkt_size,
-          pFrame->format, pFrame->pts, pFrame->key_frame,
-          pFrame->coded_picture_number);
-      printf("\n");
-
-      char frame_filename[1024];
-      snprintf(frame_filename, sizeof(frame_filename), "%s-%d.pgm", "frame",
-               pCodecContext->frame_number);
-      // Check if the frame is a planar YUV 4:2:0, 12bpp
-      // That is the format of the provided .mp4 file
-      // RGB formats will definitely not give a gray image
-      // Other YUV image may do so, but untested, so give a warning
-      if (pFrame->format != AV_PIX_FMT_YUV420P) {
-        printf(
-            "Warning: the generated file may not be a grayscale image, but "
-            "could e.g. be just the R component if the video format is RGB");
-        printf("\n");
-      }
-      // save a grayscale frame into a .pgm file
-      save_gray_frame(pFrame->data[0], pFrame->linesize[0], pFrame->width,
-                      pFrame->height, frame_filename);
+      // At this point ref_pFrame has been received.
+      break;
     }
   }
+
+  int dist_response = avcodec_send_packet(dist_pCodecContext, dist_pPacket);
+  if (dist_response < 0) {
+    printf("Error while sending a ref packet to the decoder: ");
+    printf("\n");
+    return dist_response;
+  }
+
+  while (dist_response >= 0) {
+    dist_response = avcodec_receive_frame(dist_pCodecContext, dist_pFrame);
+    if (dist_response == AVERROR(EAGAIN) || dist_response == AVERROR_EOF) {
+      printf("Done receiving frame.\n");
+      break;
+    } else if (dist_response < 0) {
+      printf("Error while receiving a frame from the decoder: ");
+      printf("\n");
+      return dist_response;
+    }
+
+    if (dist_response >= 0) {
+      // At this point dist_pFrame has been received.
+      break;
+    }
+  }
+
+
+  // Convert AVFrames to VMAFPictures.
+  VmafPicture ref_picture, dist_picture;
+  if (vmaf_picture_alloc(&ref_picture, VmafPixelFormat::VMAF_PIX_FMT_YUV420P, 8, ref_pFrame->width, ref_pFrame->height)
+      < 0) {
+    fprintf(stderr, "Failed to allocate vmaf_picture for reference picture.\n");
+    return 0;
+  }
+
+  if (vmaf_picture_alloc(&dist_picture,
+                         VmafPixelFormat::VMAF_PIX_FMT_YUV420P,
+                         8,
+                         dist_pFrame->width,
+                         dist_pFrame->height)
+      < 0) {
+    fprintf(stderr, "Failed to allocate vmaf_picture for distorted picture.\n");
+    return 0;
+  }
+
+  printf("Ref pframe has pts %d and Dist pFrame has pts %d\n", ref_pFrame->pts, dist_pFrame->pts);
+
+  // Copy from the AVFrames to the VmafPictures.
+  for (unsigned i = 0; i < 3; i++) {
+    uint8_t *ref_frame_data = ref_pFrame->data[i];
+    uint8_t *ref_picture_data = static_cast<uint8_t *>(ref_picture.data[i]);
+    for (unsigned j = 0; j < ref_picture.h[i]; j++) {
+      memcpy(ref_picture_data, ref_frame_data, sizeof(*ref_picture_data) * ref_picture.w[i]);
+      ref_frame_data += dist_pFrame->linesize[i];
+      ref_picture_data += ref_picture.stride[i];
+    }
+  }
+
+  for (unsigned i = 0; i < 3; i++) {
+    uint8_t *dist_frame_data = dist_pFrame->data[i];
+    uint8_t *dist_picture_data = static_cast<uint8_t *>(dist_picture.data[i]);
+    for (unsigned j = 0; j < ref_picture.h[i]; j++) {
+      memcpy(dist_picture_data, dist_frame_data, sizeof(*dist_picture_data) * dist_picture.w[i]);
+      dist_frame_data += dist_pFrame->linesize[i];
+      dist_picture_data += dist_picture.stride[i];
+    }
+  }
+
+  int err = vmaf_read_pictures(vmaf, &ref_picture, &dist_picture, *frame_index);
+  *frame_index = *frame_index + 1;
+  if (err != 0) {
+    fprintf(stderr, "\nproblem reading pictures. error_code: %d\n", err);
+  }
+
   return 0;
-}
-
-static void save_gray_frame(unsigned char* buf, int wrap, int xsize, int ysize,
-                            char* filename) {
-  FILE* f;
-  int i;
-  f = fopen(filename, "w");
-  // writing the minimal required header for a pgm file format
-  // portable graymap format ->
-  // https://en.wikipedia.org/wiki/Netpbm_format#PGM_example
-  fprintf(f, "P5\n%d %d\n%d\n", xsize, ysize, 255);
-
-  // writing line by line
-  for (i = 0; i < ysize; i++) fwrite(buf + i * wrap, 1, xsize, f);
-  fclose(f);
 }

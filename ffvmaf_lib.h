@@ -44,4 +44,6 @@ double ComputeVmafScore(const char *reference_video_buffer,
                         const char *distorted_video_buffer,
                         uint64_t distorted_video_buffer_size);
 
+double ComputeVmaf(uintptr_t reference_frame, uintptr_t distorted_frame);
+
 #endif // FFVMAF_LIB_H
