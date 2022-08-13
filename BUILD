@@ -57,6 +57,7 @@ WASM_LINKOPTS = [
 # "-sEXPORT_ES6=1",
 # "-sMODULARIZE=1",
  "-sEXPORT_ALL=1",
+ "-sPTHREAD_POOL_SIZE='navigator.hardwareConcurrency'",
  "-sALLOW_MEMORY_GROWTH=1",
  "-sNO_EXIT_RUNTIME=1",
  "-sENVIRONMENT='web,worker'", # Exclude node environment. The frontend react app does not support it.
