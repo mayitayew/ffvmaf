@@ -35,7 +35,7 @@ self.addEventListener('message', function(e) {
   let decoder = new VideoDecoder({
     output : frame => {
 
-      const buffer_length = frame.allocationSize();
+     /* const buffer_length = frame.allocationSize();
       console.log("Duration is ", frame.duration);
       console.log("Timestamp is ", frame.timestamp);
       let buffer = new Uint8Array(buffer_length);
@@ -43,7 +43,7 @@ self.addEventListener('message', function(e) {
       var videoFrameBuffer = new HeapVideoBuffer(Module, buffer_length);
       videoFrameBuffer.getVideoData().set(buffer);
 
-      Module.readForVmaf(videoFrameBuffer.getHeapAddress(), videoFrameBuffer.getHeapAddress());
+      Module.readForVmaf(videoFrameBuffer.getHeapAddress(), videoFrameBuffer.getHeapAddress());*/
 
       ctx.drawImage(frame, 0, 0, offscreen.width, offscreen.height);
 

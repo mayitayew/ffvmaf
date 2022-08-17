@@ -44,7 +44,7 @@ int main(int argc, const char* argv[]) {
     return -1;
   }
 
-  AVInputFormat *iformat_for_reference = const_cast<AVInputFormat *>(av_find_input_format("mp4"));
+  AVInputFormat *iformat_for_reference = const_cast<AVInputFormat *>(av_find_input_format("webm"));
   if (!iformat_for_reference) {
     printf("*******ERROR could not find input format*******\n");
   } else {
@@ -58,7 +58,7 @@ int main(int argc, const char* argv[]) {
   // AVInputFormat (if you pass NULL it'll do the auto detect)
   // and AVDictionary (which are options to the demuxer)
   // http://ffmpeg.org/doxygen/trunk/group__lavf__decoding.html#ga31d601155e9035d5b0e7efedc894ee49
-  const std::string filepath = "file:" + tools::GetModelRunfilesPath(argv[0]) + "mux.mp4";
+  const std::string filepath = "file:" + tools::GetModelRunfilesPath(argv[0]) + "bbb_trailer.webm";
   fprintf(stderr, "filepath: %s\n", filepath.c_str());
   if (avformat_open_input(&pFormatContext, filepath.c_str(), NULL, NULL) != 0) {
     printf("ERROR could not open the file\n");
@@ -135,15 +135,7 @@ int main(int argc, const char* argv[]) {
 
       printf("Video Codec: resolution %d x %d\n", pLocalCodecParameters->width,
              pLocalCodecParameters->height);
-    } else if (pLocalCodecParameters->codec_type == AVMEDIA_TYPE_AUDIO) {
-//      printf("Audio Codec: %d channels, sample rate %d\n",
-//             pLocalCodecParameters->channels,
-//             pLocalCodecParameters->sample_rate);
     }
-
-//    // print its name, id and bitrate
-//    printf("\tCodec %s ID %d bit_rate %lld\n", pLocalCodec->name,
-//           pLocalCodec->id, pLocalCodecParameters->bit_rate);
   }
 
   if (video_stream_index == -1) {

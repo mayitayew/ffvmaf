@@ -11,7 +11,7 @@ class MyHTTPRequestHandler(server.SimpleHTTPRequestHandler):
         self.send_header("Cross-Origin-Opener-Policy", "same-origin")
         self.send_header("Cross-Origin-Embedder-Policy", "require-corp")
 
-server_address = ('localhost', 5050)
+server_address = ('localhost', 8080)
 httpd = server.HTTPServer(server_address, MyHTTPRequestHandler)
 httpd.socket = ssl.wrap_socket(httpd.socket,
                                server_side=True,

@@ -1,26 +1,28 @@
 'use strict';
-import Module from './ffvmaf_wasm_lib.js';
-
-let ffModule;
-Module().then(module => {
-    ffModule = module;
-    console.log('ffModule loaded');
-    console.log('Vmaf version is ' + ffModule.getVmafVersion());
-}).catch(e => {
-    console.log('Module() error: ' + e);
-});
+// import Module from './ffvmaf_wasm_lib.js';
+//
+// let ffModule;
+// Module().then(module => {
+//     ffModule = module;
+//     console.log('ffModule loaded');
+//     console.log('Vmaf version is ' + ffModule.getVmafVersion());
+// }).catch(e => {
+//     console.log('Module() error: ' + e);
+// });
 
 let videoUrl;
 
+const worker = new Worker('./worker.js', {type: 'module'});
 const input = document.getElementById('input');
 const button = document.getElementById('button');
 input.onchange = function() {
-    const blobUrl = URL.createObjectURL(input.files[0]);
-    videoUrl = "https://localhost:5050/720p.mp4";
+    console.log("Input changed");
 }
 
 button.onclick = function() {
-    const score = ffModule.computeVmaf(videoUrl, videoUrl);
-    console.log('Vmaf score is ' + score);
+    if (input.files.length > 0) {
+        const f = input.files[0];
+        worker.postMessage([f]);
+    }
 }
 

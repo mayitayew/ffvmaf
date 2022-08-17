@@ -1,21 +1,4 @@
 package(default_visibility=["//visibility:public"])
 
-exports_files([
-    "720p.mp4",
-    "mux.mp4",
-    "mux_modified.mp4",
-    "sample.mp4",
-    "ref.yuv",
-    "vmaf_4k_v0.6.1.json",
-    "vmaf_b_v0.6.3.json",
-    "vmaf_float_4k_v0.6.1.json",
-    "vmaf_float_b_v0.6.3.json",
-    "vmaf_float_v0.6.1.json",
-    "vmaf_float_v0.6.1.pkl",
-    "vmaf_float_v0.6.1.pkl.model",
-    "vmaf_float_v0.6.1neg.json",
-    "vmaf_float_v0.6.1neg.pkl",
-    "vmaf_float_v0.6.1neg.pkl.model",
-    "vmaf_v0.6.1.json",
-    "vmaf_v0.6.1neg.json",
-])
+exports_files(
+glob(["**"]))

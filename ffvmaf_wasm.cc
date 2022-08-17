@@ -25,7 +25,7 @@ uint32_t frame_index;
 VmafPicture reference_picture, distorted_picture;
 
 /* Prepare the in-memory buffer and loaders for VMAF models. */
-VmafModelBuffer vmaf_model_buffer({"vmaf_v0.6.1neg.json"}, "models/");
+VmafModelBuffer vmaf_model_buffer({"vmaf_v0.6.1neg.json",}, "models/");
 
 void downloadSucceeded(emscripten_fetch_t *fetch) {
   const char *model_name = static_cast<char *>(fetch->userData);
@@ -37,7 +37,6 @@ void downloadSucceeded(emscripten_fetch_t *fetch) {
     InitalizeVmaf(vmaf, model, model_collection, &model_collection_count,
                   vmaf_model_buffer.GetBuffer("vmaf_v0.6.1neg.json"),
                   vmaf_model_buffer.GetBufferSize("vmaf_v0.6.1neg.json"));
-    printf("MOdel collection count after init: %llu\n", model_collection_count);
   }
 }
 
@@ -57,6 +56,10 @@ void asyncDownload(const std::string &url, const std::string &model_name) {
   attr.onerror = downloadFailed;
   emscripten_fetch(&attr, url.c_str());
 }
+
+extern "C" {
+extern void renderVmafScore();
+};
 
 int main(int argc, char **argv) {
   // Initailize the VMAF context.
@@ -97,6 +100,7 @@ int main(int argc, char **argv) {
   frame_index = 0;
   // Download the model files and load them into memory.
   vmaf_model_buffer.DownloadModels();
+  renderVmafScore();
 }
 
 std::vector<uint32_t> offsets{0, 345600, 432000};
@@ -149,8 +153,11 @@ void ReadForVmaf(uintptr_t reference_frame, uintptr_t distorted_frame) {
 
 std::string GetVmafVersion() { return std::string(vmaf_version()); }
 
+void ReadFile(const std::string& filename) { ReadInputFromFile(filename); }
+
 // The functions below are exposed in the wasm module.
 EMSCRIPTEN_BINDINGS(module) {
-    emscripten::function("readForVmaf", ReadForVmaf, emscripten::allow_raw_pointers());
+    emscripten::function("readFile", ReadFile);
     emscripten::function("getVmafVersion", GetVmafVersion);
+    emscripten::function("renderScore", renderVmafScore);
 }
