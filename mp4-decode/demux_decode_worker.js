@@ -1,13 +1,12 @@
 importScripts('./mp4box.all.min.js');
 importScripts('./mp4_demuxer.js');
-importScripts('./ffvmaf_wasm_lib.js');
-importScripts('./video_helper.js');
+// importScripts('./ffvmaf_wasm_lib.js');
+// importScripts('./video_helper.js');
 //
 // var ffVmafModule;
 
 
 self.addEventListener('message', function(e) {
-  console.log("Module is initialized. vmaf version is ", Module.getVmafVersion());
 
   let offscreen = e.data.canvas;
   let url = e.data.uri;
@@ -35,6 +34,7 @@ self.addEventListener('message', function(e) {
   let decoder = new VideoDecoder({
     output : frame => {
 
+      console.log("Decoded frame");
      /* const buffer_length = frame.allocationSize();
       console.log("Duration is ", frame.duration);
       console.log("Timestamp is ", frame.timestamp);
@@ -63,6 +63,6 @@ self.addEventListener('message', function(e) {
     offscreen.width = config.codedWidth;
 
     decoder.configure(config);
-    demuxer.start((chunk) => { decoder.decode(chunk); })
+    demuxer.start((chunk) => { console.log("Demuxed chunk"); })
   });
 })

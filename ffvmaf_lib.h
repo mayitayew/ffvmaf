@@ -12,6 +12,6 @@ int InitalizeVmaf(VmafContext *vmaf,
                   VmafModelCollection **model_collection,
                   uint64_t *model_collection_count, const char *model_buffer, uint64_t model_buffer_size);
 
-void ReadInputFromFile(const std::string& filename);
+float ComputeVmafForEachFrame(const std::string& reference_file, const std::string& test_file);
 
 #endif // FFVMAF_LIB_H

@@ -20,19 +20,6 @@ SYSTEM_FFMPEG_LINKOPTS = [
 ]
 
 cc_binary(
-    name = "basic_from_buffer",
-    srcs = ["basic_from_buffer.cc"],
-    data = ["//libvmaf/model:720p.mp4", "//libvmaf/model:bbb_trailer.webm", "//libvmaf/model:sample.mp4"],
-    deps = ["//libvmaf/src:libvmaf", ":ffvmaf_lib"],
-    linkopts = SYSTEM_FFMPEG_LINKOPTS,
-)
-
-wasm_cc_binary(
-    name = "basic_from_buffer_wasm",
-    cc_target = ":basic_from_buffer",
-)
-
-cc_binary(
     name = "basic_from_file",
     srcs = ["basic_from_file.cc"],
     data = ["//libvmaf/model:mux_modified.mp4", "//libvmaf/model:mux.mp4", "//libvmaf/model:vmaf_v0.6.1neg.json"],
@@ -54,14 +41,14 @@ wasm_cc_binary(
 WASM_LINKOPTS = [
  "--bind",
  "-sFETCH",
-# "-sEXPORT_ES6=1",
-# "-sMODULARIZE=1",
+ "-sEXPORT_ES6=1",
+ "-sMODULARIZE=1",
   "-sEXPORT_ALL=1",
   "-sPTHREAD_POOL_SIZE='navigator.hardwareConcurrency'",
  "-sALLOW_MEMORY_GROWTH=1",
  "-sNO_EXIT_RUNTIME=1",
+#"-sASSERTIONS=1",
  "-lworkerfs.js",  # To use WorkerFS filesystem
- "-sERROR_ON_UNDEFINED_SYMBOLS=0",
  "-sENVIRONMENT='web,worker'", # Exclude node environment. The frontend react app does not support it.
 ]
 
