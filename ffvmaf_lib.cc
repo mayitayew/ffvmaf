@@ -21,7 +21,7 @@ int InitalizeVmaf(VmafContext *vmaf,
   };
 
   if (vmaf_model_load_from_buffer(model, &model_config, model_buffer, model_buffer_size) != 0) {
-    fprintf(stderr, "Reading json model from buffer failed. Attempting to read it as a model collection.\n");
+    printf("Reading json model from buffer failed. Attempting to read it as a model collection.\n");
 
     if (vmaf_model_collection_load_from_buffer(model,
                                                model_collection,
@@ -51,30 +51,71 @@ int InitalizeVmaf(VmafContext *vmaf,
   return 0;
 }
 
-float ComputeVmafForEachFrame(const std::string &reference_file, const std::string &test_file) {
-  printf("Computing VMAF...\n");
-
-  av_register_all();
-  AVFormatContext *pFormatContext_reference = avformat_alloc_context();
-  AVFormatContext *pFormatContext_test = avformat_alloc_context();
-  if (!pFormatContext_reference || !pFormatContext_test) {
-    fprintf(stderr, "ERROR could not allocate memory for format contexts\n");
-    return -1.0;
+int GetNextFrame(AVFormatContext *pFormatContext,
+                 AVCodecContext *pCodecContext,
+                 AVPacket *pPacket,
+                 AVFrame *pFrame,
+                 int8_t video_stream_index) {
+  while (av_read_frame(pFormatContext, pPacket) >= 0) {
+    if (pPacket->stream_index == video_stream_index) {
+      printf("AVPacket->pts %"
+      PRId64, pPacket->pts);
+      printf("\n");
+      // decode_packet returns the number of frames decoded, or a negative value on error.
+      int response = decode_packet(pPacket, pCodecContext, pFrame);
+      if (response == 0) {
+        // No error but no frame decoded.
+        continue;
+      }
+      return response;
+    }
+    av_packet_unref(pPacket);
   }
+  return -1;
+}
+
+static int copy_picture_data(AVFrame *src, VmafPicture *dst, unsigned bpc) {
+  int err = vmaf_picture_alloc(dst, VMAF_PIX_FMT_YUV420P, bpc,
+                               src->width, src->height);
+  if (err)
+    return AVERROR(ENOMEM);
+
+  for (unsigned i = 0; i < 3; i++) {
+    uint8_t *src_data = (uint8_t *) src->data[i];
+    uint8_t *dst_data = (uint8_t *) dst->data[i];
+    for (unsigned j = 0; j < dst->h[i]; j++) {
+      memcpy(dst_data, src_data, sizeof(*dst_data) * dst->w[i]);
+      src_data += src->linesize[i];
+      dst_data += dst->stride[i];
+    }
+  }
+
+  return 0;
+}
+
+float ComputeVmafForEachFrame(const std::string &reference_file,
+                              const std::string &test_file,
+                              AVFormatContext *pFormatContext_reference,
+                              AVFormatContext *pFormatContext_test,
+                              AVCodecContext *pCodecContext_reference,
+                              AVCodecContext *pCodecContext_test,
+                              AVFrame *pFrame_reference,
+                              AVFrame *pFrame_test,
+                              AVPacket *pPacket_reference,
+                              AVPacket *pPacket_test,
+                              int8_t* video_stream_index_reference,
+                              int8_t* video_stream_index_test,
+                              std::unordered_map<uint8_t, int64_t>& frame_timestamps,
+                              VmafContext *vmaf,
+                              VmafModel *model,
+                              uintptr_t vmaf_scores_buffer) {
+  printf("ComputeVmafForEachFrame...\n");
 
   if (avformat_open_input(&pFormatContext_reference, reference_file.c_str(), NULL, NULL) != 0
       || avformat_open_input(&pFormatContext_test, test_file.c_str(), NULL, NULL) != 0) {
     fprintf(stderr, "ERROR could not open file.\n");
     return -1.0;
   }
-
-  printf("Reference file format %s, duration %lld us, bit_rate %lld\n",
-         pFormatContext_reference->iformat->name, pFormatContext_reference->duration,
-         pFormatContext_reference->bit_rate);
-
-  printf("Test file format %s, duration %lld us, bit_rate %lld\n",
-         pFormatContext_test->iformat->name, pFormatContext_test->duration,
-         pFormatContext_test->bit_rate);
 
   if (avformat_find_stream_info(pFormatContext_reference, NULL) < 0
       || avformat_find_stream_info(pFormatContext_test, NULL) < 0) {
@@ -84,7 +125,6 @@ float ComputeVmafForEachFrame(const std::string &reference_file, const std::stri
 
   AVCodec *pCodec_reference = NULL;
   AVCodecParameters *pCodecParameters_reference = NULL;
-  int reference_video_stream_index = -1;
 
   for (int i = 0; i < pFormatContext_reference->nb_streams; i++) {
     AVCodecParameters *pLocalCodecParameters = NULL;
@@ -100,20 +140,17 @@ float ComputeVmafForEachFrame(const std::string &reference_file, const std::stri
 
     // when the stream is a video we store its index, codec parameters and codec
     if (pLocalCodecParameters->codec_type == AVMEDIA_TYPE_VIDEO) {
-      if (reference_video_stream_index == -1) {
-        reference_video_stream_index = i;
-        pCodec_reference = pLocalCodec;
-        pCodecParameters_reference = pLocalCodecParameters;
-      }
-
       printf("Reference video Codec: resolution %d x %d\n", pLocalCodecParameters->width,
              pLocalCodecParameters->height);
+      *video_stream_index_reference = i;
+      pCodec_reference = pLocalCodec;
+      pCodecParameters_reference = pLocalCodecParameters;
+      break;
     }
   }
 
   AVCodec *pCodec_test = NULL;
   AVCodecParameters *pCodecParameters_test = NULL;
-  int test_video_stream_index = -1;
 
   for (int i = 0; i < pFormatContext_test->nb_streams; i++) {
     AVCodecParameters *pLocalCodecParameters = NULL;
@@ -129,24 +166,21 @@ float ComputeVmafForEachFrame(const std::string &reference_file, const std::stri
 
     // when the stream is a video we store its index, codec parameters and codec
     if (pLocalCodecParameters->codec_type == AVMEDIA_TYPE_VIDEO) {
-      if (test_video_stream_index == -1) {
-        test_video_stream_index = i;
-        pCodec_test = pLocalCodec;
-        pCodecParameters_test = pLocalCodecParameters;
-      }
-
       printf("Test video Codec: resolution %d x %d\n", pLocalCodecParameters->width,
              pLocalCodecParameters->height);
+      *video_stream_index_test = i;
+      pCodec_test = pLocalCodec;
+      pCodecParameters_test = pLocalCodecParameters;
     }
   }
 
-  if (reference_video_stream_index == -1 || test_video_stream_index == -1) {
+  if (*video_stream_index_reference == -1 || *video_stream_index_test == -1) {
     fprintf(stderr, "Reference file does not contain a video stream!\n");
     return -1.0;
   }
 
-  AVCodecContext *pCodecContext_reference = avcodec_alloc_context3(pCodec_reference);
-  AVCodecContext *pCodecContext_test = avcodec_alloc_context3(pCodec_test);
+  pCodecContext_reference = avcodec_alloc_context3(pCodec_reference);
+  pCodecContext_test = avcodec_alloc_context3(pCodec_test);
   if (!pCodecContext_reference || !pCodecContext_test) {
     fprintf(stderr, "failed to allocated memory for AVCodecContext\n");
     return -1.0;
@@ -164,54 +198,43 @@ float ComputeVmafForEachFrame(const std::string &reference_file, const std::stri
     return -1.0;
   }
 
-  AVFrame *pFrame_reference = av_frame_alloc();
-  AVFrame *pFrame_test = av_frame_alloc();
-  if (!pFrame_reference || !pFrame_test) {
-    fprintf(stderr, "failed to allocate memory for AVFrame\n");
-    return -1.0;
-  }
+  float *vmaf_scores_ptr = reinterpret_cast<float *>(vmaf_scores_buffer);
+  for (int frame_index = 0; frame_index < 100; frame_index++) {
 
-  AVPacket *pPacket_reference = av_packet_alloc();
-  AVPacket *pPacket_test = av_packet_alloc();
-  if (!pPacket_reference || !pPacket_test) {
-    fprintf(stderr, "failed to allocate memory for AVPacket\n");
-    return -1.0;
-  }
+    bool reference_frame_decoded =
+        (GetNextFrame(pFormatContext_reference, pCodecContext_reference, pPacket_reference, pFrame_reference,
+                      *video_stream_index_reference) == 1);
 
-  bool reference_frame_decoded = false;
-  bool test_frame_decoded = false;
-  for (int frame_index = 0; frame_index <= 100; frame_index++) {
-
-    // Demux packet from reference file and read the current frame.
-    while (av_read_frame(pFormatContext_reference, pPacket_reference) >= 0) {
-      if (pPacket_reference->stream_index == reference_video_stream_index) {
-        printf("AVPacket->pts %" PRId64, pPacket_reference->pts);
-        printf("\n");
-        if (decode_packet(pPacket_reference, pCodecContext_reference, pFrame_reference) < 0) {
-          break;
-        }
-        reference_frame_decoded = true;
-        break;
-      }
-      av_packet_unref(pPacket_reference);
-    }
-
-    // Demux packet from test file and read the current frame.
-    while (av_read_frame(pFormatContext_test, pPacket_test) >= 0) {
-      if (pPacket_test->stream_index == test_video_stream_index) {
-        if (decode_packet(pPacket_test, pCodecContext_test, pFrame_test) < 0) {
-          break;
-        }
-        test_frame_decoded = true;
-        break;
-      }
-      av_packet_unref(pPacket_test);
-    }
+    bool test_frame_decoded = (GetNextFrame(pFormatContext_test, pCodecContext_test, pPacket_test, pFrame_test,
+                                            *video_stream_index_test) == 1);
 
     if (reference_frame_decoded && test_frame_decoded) {
-      printf("Decoded frame %d from reference and test files.\n", frame_index);
-      reference_frame_decoded = false;
-      test_frame_decoded = false;
+
+      printf("Reference frame has height %d and width %d\n", pFrame_reference->height, pFrame_reference->width);
+      printf("Test frame has height %d and width %d\n", pFrame_test->height, pFrame_test->width);
+
+      frame_timestamps[frame_index] = pFrame_reference->best_effort_timestamp;
+
+      VmafPicture reference_vmaf_picture, test_vmaf_picture;
+      if (copy_picture_data(pFrame_reference, &reference_vmaf_picture, 8) != 0 ||
+          copy_picture_data(pFrame_test, &test_vmaf_picture, 8) != 0) {
+        fprintf(stderr, "Error allocating vmaf picture\n");
+        return -1.0;
+      }
+
+      if (vmaf_read_pictures(vmaf, &reference_vmaf_picture, &test_vmaf_picture, frame_index) != 0) {
+        fprintf(stderr, "Error reading pictures\n");
+        return -1.0;
+      }
+
+      double vmaf_score;
+      if (frame_index >= 5 && vmaf_score_at_index(vmaf, model, &vmaf_score, frame_index - 5) != 0) {
+        fprintf(stderr, "Error computing vmaf score at index\n");
+        return -1.0;
+      }
+      vmaf_scores_ptr[frame_index - 5] = vmaf_score;
+      printf("Frame %d: vmaf score %f\n", frame_index - 5, vmaf_score);
+
     } else if (!reference_frame_decoded && !test_frame_decoded) {
       printf("Reached end of stream for both files.\n");
       break;
@@ -223,10 +246,23 @@ float ComputeVmafForEachFrame(const std::string &reference_file, const std::stri
       break;
     }
   }
+
+  // Get vmaf score for the last few indices.
+  double vmaf_score;
+  for (int i = 95; i < 100; i++) {
+    if (vmaf_score_at_index(vmaf, model, &vmaf_score, i) != 0) {
+      fprintf(stderr, "Error computing vmaf score at index\n");
+      return -1.0;
+    }
+    vmaf_scores_ptr[i] = vmaf_score;
+    printf("Frame %d: vmaf score %f\n", i, vmaf_score);
+  }
+
 }
 
-static int decode_packet(AVPacket* pPacket, AVCodecContext* pCodecContext,
-                         AVFrame* pFrame) {
+// Returns 0 if no frames have been decoded, 1 if a frame has been decoded, and a negative value on error.
+static int decode_packet(AVPacket *pPacket, AVCodecContext *pCodecContext,
+                         AVFrame *pFrame) {
   int response = avcodec_send_packet(pCodecContext, pPacket);
 
   if (response < 0) {
@@ -235,16 +271,20 @@ static int decode_packet(AVPacket* pPacket, AVCodecContext* pCodecContext,
     return response;
   }
 
+  int num_frames = 0;
   while (response >= 0) {
-    response = avcodec_receive_frame(pCodecContext, pFrame);
+    // We know that there is exactly one frame per packet. After reading this frame, however, we still need to make another
+    // call to receive_frame() to flush the decoder. To retain the decoded frame, we don't pass it in the flush call
+    // and instead pass a nullptr.
+    auto frame_arg = num_frames == 0 ? pFrame : nullptr;
+    response = avcodec_receive_frame(pCodecContext, frame_arg);
     if (response == AVERROR(EAGAIN) || response == AVERROR_EOF) {
-      //printf("Done receiving frame.\n");
       break;
     } else if (response < 0) {
-//      printf("Error while receiving a frame from the decoder: ");
-//      printf("\n");
       return response;
     }
+    printf("Parsed a frame from the packet.\n");
+    num_frames++;
   }
-  return 0;
+  return num_frames;
 }

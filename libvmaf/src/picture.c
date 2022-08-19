@@ -31,7 +31,6 @@
 int vmaf_picture_alloc(VmafPicture *pic, enum VmafPixelFormat pix_fmt,
                        unsigned bpc, unsigned w, unsigned h)
 {
-    printf("vmaf_picture_alloc\n");
     if (!pic) return -EINVAL;
     if (!pix_fmt) return -EINVAL;
     if (bpc < 8 || bpc > 16) return -EINVAL;

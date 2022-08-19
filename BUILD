@@ -8,7 +8,7 @@ FFMPEG_DEPS = [
     "@ffmpeg//:avformat_lib",
     "@zlib",
     "@bzip2",
-    "@boringssl//:ssl",
+    "@boringssl//:ssl",  # TODO: remove this dependency and update ffmpeg's config file.
 ]
 
 SYSTEM_FFMPEG_LINKOPTS = [

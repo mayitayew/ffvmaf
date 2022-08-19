@@ -20,12 +20,24 @@ VmafModelConfig model_config = {
 };
 VmafModelCollection **model_collection;
 uint64_t model_collection_count;
-uint32_t frame_index;
 
-VmafPicture reference_picture, distorted_picture;
+/* Declare libav{format, util, codec} specific global variables. */
+AVFormatContext *pFormatContext_reference;
+AVFormatContext *pFormatContext_test;
+AVCodecContext *pCodecContext_reference;
+AVCodecContext *pCodecContext_test;
+AVFrame *pFrame_reference;
+AVFrame *pFrame_test;
+AVPacket *pPacket_reference;
+AVPacket *pPacket_test;
+int8_t *video_stream_index_reference;
+int8_t *video_stream_index_test;
+
+// Frame number to timestamp mapping.
+std::unordered_map <uint8_t, int64_t> frame_timestamps;
 
 /* Prepare the in-memory buffer and loaders for VMAF models. */
-VmafModelBuffer vmaf_model_buffer({"vmaf_v0.6.1neg.json",}, "models/");
+VmafModelBuffer vmaf_model_buffer({"vmaf_v0.6.1neg.json",}, "https://localhost:3000/models/");
 
 void downloadSucceeded(emscripten_fetch_t *fetch) {
   const char *model_name = static_cast<char *>(fetch->userData);
@@ -58,6 +70,32 @@ void asyncDownload(const std::string &url, const std::string &model_name) {
 }
 
 int main(int argc, char **argv) {
+  // Libav related initializations.
+  av_register_all();
+  pFormatContext_reference = avformat_alloc_context();
+  pFormatContext_test = avformat_alloc_context();
+  if (!pFormatContext_reference || !pFormatContext_test) {
+    fprintf(stderr, "ERROR could not allocate memory for format contexts\n");
+    return -1;
+  }
+
+  pFrame_reference = av_frame_alloc();
+  pFrame_test = av_frame_alloc();
+  if (!pFrame_reference || !pFrame_test) {
+    fprintf(stderr, "failed to allocate memory for AVFrame\n");
+    return -1;
+  }
+
+  pPacket_reference = av_packet_alloc();
+  pPacket_test = av_packet_alloc();
+  if (!pPacket_reference || !pPacket_test) {
+    fprintf(stderr, "failed to allocate memory for AVPacket\n");
+    return -1;
+  }
+  *video_stream_index_reference = -1;
+  *video_stream_index_test = -1;
+  frame_timestamps.reserve(100);
+
   // Initailize the VMAF context.
   int err = vmaf_init(&vmaf, cfg);
   if (err) {
@@ -75,7 +113,6 @@ int main(int argc, char **argv) {
   model_collection = (VmafModelCollection **) malloc(model_sz);
   memset(model_collection, 0, model_collection_sz);
   model_collection_count = 0;
-  av_register_all();
 
   // Download the model files and load them into memory.
   vmaf_model_buffer.DownloadModels();
@@ -83,13 +120,37 @@ int main(int argc, char **argv) {
 
 std::string GetVmafVersion() { return std::string(vmaf_version()); }
 
-void ComputeVmaf(const std::string &reference_file, const std::string &test_file) {
+void ComputeVmaf(const std::string &reference_file, const std::string &test_file, uintptr_t vmaf_scores_buffer) {
   ComputeVmafForEachFrame(reference_file,
-              test_file);
+                          test_file,
+                          pFormatContext_reference,
+                          pFormatContext_test,
+                          pCodecContext_reference,
+                          pCodecContext_test,
+                          pFrame_reference,
+                          pFrame_test,
+                          pPacket_reference,
+                          pPacket_test,
+                          video_stream_index_reference,
+                          video_stream_index_test,
+                          frame_timestamps,
+                          vmaf,
+                          model[0],
+                          vmaf_scores_buffer);
+}
+
+int GetFramesAtIndex(uint8_t index, uintptr_t reference_frame, uintptr_t test_frame) {
+  return GetFrameAtTimestamp(pFormatContext_reference,
+                      pCodecContext_reference,
+                      pFrame_reference,
+                      pPacket_reference,
+                      *video_stream_index_reference,
+                      frame_timestamps[index],
+                      reference_frame);
 }
 
 // The functions below are exposed in the wasm module.
 EMSCRIPTEN_BINDINGS(module) {
-    emscripten::function("computeVmaf", ComputeVmaf);
+    emscripten::function("computeVmaf", ComputeVmaf, emscripten::allow_raw_pointers());
     emscripten::function("getVmafVersion", GetVmafVersion);
 }
