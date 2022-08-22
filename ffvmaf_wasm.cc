@@ -15,9 +15,6 @@ VmafConfiguration cfg = {
 };
 VmafContext *vmaf;
 VmafModel **model;
-VmafModelConfig model_config = {
-    .name = "current_model",
-};
 VmafModelCollection **model_collection;
 uint64_t model_collection_count;
 
@@ -37,7 +34,7 @@ int8_t *video_stream_index_test;
 std::unordered_map <uint8_t, int64_t> frame_timestamps;
 
 /* Prepare the in-memory buffer and loaders for VMAF models. */
-VmafModelBuffer vmaf_model_buffer({"vmaf_v0.6.1neg.json",}, "https://localhost:3000/models/");
+VmafModelBuffer vmaf_model_buffer({"vmaf_v0.6.1neg.json", "vmaf_v0.6.1.json"}, "https://localhost:3000/models/");
 
 void downloadSucceeded(emscripten_fetch_t *fetch) {
   const char *model_name = static_cast<char *>(fetch->userData);
@@ -46,9 +43,6 @@ void downloadSucceeded(emscripten_fetch_t *fetch) {
   vmaf_model_buffer.SetFetch(model_name, fetch);
   if (vmaf_model_buffer.AllModelsDownloaded()) {
     printf("Finished downloading all models.\n");
-    InitalizeVmaf(vmaf, model, model_collection, &model_collection_count,
-                  vmaf_model_buffer.GetBuffer("vmaf_v0.6.1neg.json"),
-                  vmaf_model_buffer.GetBufferSize("vmaf_v0.6.1neg.json"));
   }
 }
 
@@ -120,8 +114,13 @@ int main(int argc, char **argv) {
 
 std::string GetVmafVersion() { return std::string(vmaf_version()); }
 
-void ComputeVmaf(const std::string &reference_file, const std::string &test_file, uintptr_t vmaf_scores_buffer) {
-  ComputeVmafForEachFrame(reference_file,
+void ComputeVmaf(const std::string &reference_file, const std::string &test_file, uintptr_t vmaf_scores_buffer, bool use_phone_model, bool use_neg_mode) {
+
+    const char* model_name = use_neg_mode ? "vmaf_v0.6.1neg.json" : "vmaf_v0.6.1.json";
+    InitializeVmaf(vmaf, model, model_collection, &model_collection_count,
+                  vmaf_model_buffer.GetBuffer(model_name),
+                  vmaf_model_buffer.GetBufferSize(model_name), use_phone_model);
+    ComputeVmafForEachFrame(reference_file,
                           test_file,
                           pFormatContext_reference,
                           pFormatContext_test,

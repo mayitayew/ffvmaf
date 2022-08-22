@@ -9,7 +9,7 @@ extern "C" {
 
 #include <unordered_map>
 
-int InitalizeVmaf(VmafContext *vmaf,
+int InitializeVmaf(VmafContext *vmaf,
                   VmafModel **model,
                   VmafModelCollection **model_collection,
                   uint64_t *model_collection_count, const char *model_buffer, uint64_t model_buffer_size);
