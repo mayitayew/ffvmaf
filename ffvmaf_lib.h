@@ -32,7 +32,7 @@ float ComputeVmafForEachFrame(const std::string &reference_file,
                               int8_t *video_stream_index_test,
                               std::unordered_map <uint8_t, int64_t> &frame_timestamps,
                               VmafContext *vmaf,
-                              VmafModel *model, uintptr_t vmaf_scores_buffer);
+                              VmafModel *model, uintptr_t output_buffer);
 
 int GetFrameAtTimestamp(AVFormatContext *pFormatContext,
                         AVCodecContext *pCodecContext,

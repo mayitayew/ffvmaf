@@ -114,7 +114,7 @@ int main(int argc, char **argv) {
 
 std::string GetVmafVersion() { return std::string(vmaf_version()); }
 
-void ComputeVmaf(const std::string &reference_file, const std::string &test_file, uintptr_t vmaf_scores_buffer, bool use_phone_model, bool use_neg_mode) {
+void ComputeVmaf(const std::string &reference_file, const std::string &test_file, uintptr_t output_buffer, bool use_phone_model, bool use_neg_mode) {
 
     const char* model_name = use_neg_mode ? "vmaf_v0.6.1neg.json" : "vmaf_v0.6.1.json";
     InitializeVmaf(vmaf, model, model_collection, &model_collection_count,
@@ -135,7 +135,7 @@ void ComputeVmaf(const std::string &reference_file, const std::string &test_file
                           frame_timestamps,
                           vmaf,
                           model[0],
-                          vmaf_scores_buffer);
+                            output_buffer);
 }
 
 int GetFramesAtIndex(uint8_t index, uintptr_t reference_frame, uintptr_t test_frame) {

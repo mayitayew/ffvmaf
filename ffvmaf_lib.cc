@@ -81,7 +81,27 @@ int GetNextFrame(AVFormatContext *pFormatContext,
   return -1;
 }
 
-static int copy_picture_data(AVFrame *src, VmafPicture *dst, unsigned bpc) {
+static int ScaleFrame(SwsContext *sws_context, AVFrame *dst, AVFrame *src) {
+  sws_scale(sws_context,
+            (const uint8_t *const *) src->data,
+            src->linesize,
+            0,
+            src->height,
+            dst->data,
+            dst->linesize);
+  return 0;
+}
+
+static int ScaleFrameToHD(SwsContext *sws_context, AVFrame *dst, AVFrame *src) {
+  if (sws_context != nullptr) {
+    ScaleFrame(sws_context, dst, src);
+  } else {
+    dst = src;
+  }
+  return 0;
+}
+
+static int CopyPictureData(AVFrame *src, VmafPicture *dst, unsigned bpc) {
   int err = vmaf_picture_alloc(dst, VMAF_PIX_FMT_YUV420P, bpc,
                                src->width, src->height);
   if (err)
@@ -119,8 +139,7 @@ float ComputeVmafForEachFrame(const std::string &reference_file,
                               std::unordered_map <uint8_t, int64_t> &frame_timestamps,
                               VmafContext *vmaf,
                               VmafModel *model,
-                              uintptr_t vmaf_scores_buffer) {
-  printf("ComputeVmafForEachFrame...\n");
+                              uintptr_t output_buffer) {
 
   if (avformat_open_input(&pFormatContext_reference, reference_file.c_str(), NULL, NULL) != 0
       || avformat_open_input(&pFormatContext_test, test_file.c_str(), NULL, NULL) != 0) {
@@ -134,11 +153,12 @@ float ComputeVmafForEachFrame(const std::string &reference_file,
     return -1.0;
   }
 
+  float *output_buffer_ptr = reinterpret_cast<float *>(output_buffer);
+
   AVCodec *pCodec_reference = NULL;
   AVCodecParameters *pCodecParameters_reference = NULL;
-
-  SwsContext *reference_sws_context;
-  SwsContext *test_sws_context;
+  SwsContext *reference_sws_context = NULL;
+  SwsContext *test_sws_context = NULL;
   AVFrame *scaled_pFrame_reference = NULL;
   AVFrame *scaled_pFrame_test = NULL;
 
@@ -156,8 +176,6 @@ float ComputeVmafForEachFrame(const std::string &reference_file,
 
     // when the stream is a video we store its index, codec parameters and codec
     if (pLocalCodecParameters->codec_type == AVMEDIA_TYPE_VIDEO) {
-      printf("Reference video Codec: resolution %d x %d\n", pLocalCodecParameters->width,
-             pLocalCodecParameters->height);
       if (!IsHDResolution(pLocalCodecParameters)) {
         reference_sws_context = sws_getContext(pLocalCodecParameters->width,
                                                pLocalCodecParameters->height,
@@ -169,7 +187,19 @@ float ComputeVmafForEachFrame(const std::string &reference_file,
                                                NULL,
                                                NULL,
                                                NULL);
+
         scaled_pFrame_reference = av_frame_alloc();
+        if (!scaled_pFrame_reference) {
+          fprintf(stderr, "Failed to allocate new frame.");
+          return -1.0;
+        }
+        scaled_pFrame_reference->height = 1080;
+        scaled_pFrame_reference->width = 1920;
+        scaled_pFrame_reference->format = AV_PIX_FMT_YUV420P;
+        if (av_frame_get_buffer(scaled_pFrame_reference, 32)) {
+          fprintf(stderr, "Failed to allocate data buffers for new frame.\n");
+          return -1.0;
+        }
       }
       *video_stream_index_reference = i;
       pCodec_reference = pLocalCodec;
@@ -195,8 +225,6 @@ float ComputeVmafForEachFrame(const std::string &reference_file,
 
     // when the stream is a video we store its index, codec parameters and codec
     if (pLocalCodecParameters->codec_type == AVMEDIA_TYPE_VIDEO) {
-      printf("Test video Codec: resolution %d x %d\n", pLocalCodecParameters->width,
-             pLocalCodecParameters->height);
       if (!IsHDResolution(pLocalCodecParameters)) {
         test_sws_context = sws_getContext(pLocalCodecParameters->width,
                                           pLocalCodecParameters->height,
@@ -208,7 +236,19 @@ float ComputeVmafForEachFrame(const std::string &reference_file,
                                           NULL,
                                           NULL,
                                           NULL);
+
         scaled_pFrame_test = av_frame_alloc();
+        if (!scaled_pFrame_test) {
+          fprintf(stderr, "Failed to allocate new frame.");
+          return -1.0;
+        }
+        scaled_pFrame_test->height = 1080;
+        scaled_pFrame_test->width = 1920;
+        scaled_pFrame_test->format = AV_PIX_FMT_YUV420P;
+        if (av_frame_get_buffer(scaled_pFrame_test, 32)) {
+          fprintf(stderr, "Failed to allocate data buffers for new frame.\n");
+          return -1.0;
+        }
       }
       *video_stream_index_test = i;
       pCodec_test = pLocalCodec;
@@ -217,9 +257,19 @@ float ComputeVmafForEachFrame(const std::string &reference_file,
   }
 
   if (*video_stream_index_reference == -1 || *video_stream_index_test == -1) {
-    fprintf(stderr, "Reference file does not contain a video stream!\n");
+    fprintf(stderr, "One of the files does not contain a video stream!\n");
     return -1.0;
   }
+
+  const unsigned num_frames_reference =
+      std::round(av_q2d(pFormatContext_reference->streams[*video_stream_index_reference]->r_frame_rate) *
+          pFormatContext_reference->duration / AV_TIME_BASE);
+  const unsigned
+      num_frames_test = std::round(av_q2d(pFormatContext_test->streams[*video_stream_index_test]->r_frame_rate) *
+      pFormatContext_test->duration / AV_TIME_BASE);
+  const unsigned num_common_frames = std::min(num_frames_reference, num_frames_test);
+
+  output_buffer_ptr[0] = (float) num_common_frames;
 
   pCodecContext_reference = avcodec_alloc_context3(pCodec_reference);
   pCodecContext_test = avcodec_alloc_context3(pCodec_test);
@@ -240,8 +290,14 @@ float ComputeVmafForEachFrame(const std::string &reference_file,
     return -1.0;
   }
 
-  float *vmaf_scores_ptr = reinterpret_cast<float *>(vmaf_scores_buffer);
-  for (int frame_index = 0; frame_index < 100; frame_index++) {
+  unsigned frame_index;
+  unsigned frame_index_for_vmaf;
+  const unsigned num_frames_to_process = std::min(num_common_frames, (unsigned) 100000);
+  float fps = 0;
+  const time_t t0 = clock();
+  for (frame_index = 0; frame_index < num_frames_to_process; frame_index++) {
+
+    output_buffer_ptr[1] = (float) frame_index;
 
     bool reference_frame_decoded =
         (GetNextFrame(pFormatContext_reference, pCodecContext_reference, pPacket_reference, pFrame_reference,
@@ -252,69 +308,59 @@ float ComputeVmafForEachFrame(const std::string &reference_file,
 
     if (reference_frame_decoded && test_frame_decoded) {
 
-      printf("Reference frame has height %d and width %d\n", pFrame_reference->height, pFrame_reference->width);
-      printf("Test frame has height %d and width %d\n", pFrame_test->height, pFrame_test->width);
-
-      sws_scale()
       // Scale the frames to HD if they are not already that resolution.
-//      if (reference_sws_context != nullptr
-//          && sws_scale_frame(reference_sws_context, scaled_pFrame_reference, pFrame_reference)) {
-//        printf("Failed to scale reference frame to HD size.");
-//        return -1.0;
-//      } else {
-//        scaled_pFrame_reference = pFrame_reference;
-//      }
-//
-//      if (test_sws_context != nullptr && sws_scale_frame(test_sws_context, scaled_pFrame_test, pFrame_test)) {
-//        printf("Failed to scale test frame to HD size.");
-//        return -1.0;
-//      } else {
-//        scaled_pFrame_test = pFrame_test;
-//      }
+      ScaleFrameToHD(reference_sws_context, scaled_pFrame_reference, pFrame_reference);
+      ScaleFrameToHD(test_sws_context, scaled_pFrame_test, pFrame_test);
 
+      // Copy the frames into VmafPictures and read them into VmafContext.
       VmafPicture reference_vmaf_picture, test_vmaf_picture;
-
-      if (copy_picture_data(pFrame_reference, &reference_vmaf_picture, 8) != 0 ||
-          copy_picture_data(pFrame_test, &test_vmaf_picture, 8) != 0) {
+      if (CopyPictureData(scaled_pFrame_reference, &reference_vmaf_picture, 8) != 0 ||
+          CopyPictureData(scaled_pFrame_test, &test_vmaf_picture, 8) != 0
+          || vmaf_read_pictures(vmaf, &reference_vmaf_picture, &test_vmaf_picture, frame_index) != 0) {
         fprintf(stderr, "Error allocating vmaf picture\n");
         return -1.0;
       }
 
-      if (vmaf_read_pictures(vmaf, &reference_vmaf_picture, &test_vmaf_picture, frame_index) != 0) {
-        fprintf(stderr, "Error reading pictures\n");
-        return -1.0;
-      }
-
+      // Compute the vmaf score at index. The score is computed for the frame_index_for_vmaf'th frame.
       double vmaf_score;
-      if (frame_index >= 5 && vmaf_score_at_index(vmaf, model, &vmaf_score, frame_index - 5) != 0) {
-        fprintf(stderr, "Error computing vmaf score at index\n");
-        return -1.0;
+      if (frame_index >= 2) {
+        frame_index_for_vmaf = frame_index - 2;
+        int err = vmaf_score_at_index(vmaf, model, &vmaf_score, frame_index_for_vmaf);
+        if (err != 0) {
+          fprintf(stderr, "Error computing vmaf score at index\n");
+          return -1.0;
+        }
+        output_buffer_ptr[3 + frame_index_for_vmaf] = vmaf_score;
+        printf("Frame %d: vmaf score %f\n", frame_index_for_vmaf, vmaf_score);
       }
-      vmaf_scores_ptr[frame_index - 5] = vmaf_score;
-      printf("Frame %d: vmaf score %f\n", frame_index - 5, vmaf_score);
 
-    } else if (!reference_frame_decoded && !test_frame_decoded) {
-      printf("Reached end of stream for both files.\n");
-      break;
-    } else if (!test_frame_decoded) {
-      printf("Reached end of stream for test file.\n");
-      break;
-    } else if (!reference_frame_decoded) {
-      printf("Reached end of stream for reference file.\n");
+      // Compute and store FPS.
+      if (frame_index % 5 == 0) {
+        fps = (frame_index + 1) /
+            (((float) clock() - t0) / CLOCKS_PER_SEC);
+        printf("Computing at a rate of %f fps\n", fps);
+        output_buffer_ptr[2] = fps;
+      }
+
+    } else {
+      fprintf(stderr, "Decoding failed before end of files.\n");
       break;
     }
   }
 
-  // Get vmaf score for the last few indices.
-  double vmaf_score;
-  for (int i = 95; i < 100; i++) {
-    if (vmaf_score_at_index(vmaf, model, &vmaf_score, i) != 0) {
-      fprintf(stderr, "Error computing vmaf score at index\n");
-      return -1.0;
-    }
-    vmaf_scores_ptr[i] = vmaf_score;
-    printf("Frame %d: vmaf score %f\n", i, vmaf_score);
+  // Flush the VMAF context and compute the pooled VMAF score.
+  if (vmaf_read_pictures(vmaf, NULL, NULL, 0)) {
+    fprintf(stderr, "Problem flushing VMAF context.\n");
+    return -1.0;
   }
+  double pooled_vmaf_score = 0;
+  if (vmaf_score_pooled(vmaf, model, VMAF_POOL_METHOD_MEAN, &pooled_vmaf_score, 0, frame_index_for_vmaf + 1)) {
+    fprintf(stderr, "Problem computing pooled VMAF score.\n");
+    return -1.0;
+  }
+  printf("Pooled VMAF score: %f", pooled_vmaf_score);
+  output_buffer_ptr[3 + num_common_frames] = (float) pooled_vmaf_score;
+  return 0.0;
 }
 
 // Returns 0 if no frames have been decoded, 1 if a frame has been decoded, and a negative value on error.
