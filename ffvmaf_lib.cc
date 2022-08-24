@@ -92,11 +92,40 @@ static int ScaleFrame(SwsContext *sws_context, AVFrame *dst, AVFrame *src) {
   return 0;
 }
 
-static int ScaleFrameToHD(SwsContext *sws_context, AVFrame *dst, AVFrame *src) {
-  if (sws_context != nullptr) {
+static int ScaleFrameToHD(SwsContext *sws_context, AVFrame *&dst, AVFrame *&src) {
+  if (sws_context != NULL) {
     ScaleFrame(sws_context, dst, src);
   } else {
     dst = src;
+  }
+  return 0;
+}
+
+static int AllocateHDFrame(const AVCodecParameters *pCodec_parameters,
+                           SwsContext *&sws_context,
+                           AVFrame *&scaled_pFrame) {
+  sws_context = sws_getContext(pCodec_parameters->width,
+                               pCodec_parameters->height,
+                               AV_PIX_FMT_YUV420P,
+                               1920,
+                               1080,
+                               AV_PIX_FMT_YUV420P,
+                               SWS_BICUBIC,
+                               NULL,
+                               NULL,
+                               NULL);
+
+  scaled_pFrame = av_frame_alloc();
+  if (!scaled_pFrame) {
+    fprintf(stderr, "Failed to allocate new frame.");
+    return -1.0;
+  }
+  scaled_pFrame->height = 1080;
+  scaled_pFrame->width = 1920;
+  scaled_pFrame->format = AV_PIX_FMT_YUV420P;
+  if (av_frame_get_buffer(scaled_pFrame, 32)) {
+    fprintf(stderr, "Failed to allocate data buffers for new frame.\n");
+    return -1.0;
   }
   return 0;
 }
@@ -177,27 +206,9 @@ float ComputeVmafForEachFrame(const std::string &reference_file,
     // when the stream is a video we store its index, codec parameters and codec
     if (pLocalCodecParameters->codec_type == AVMEDIA_TYPE_VIDEO) {
       if (!IsHDResolution(pLocalCodecParameters)) {
-        reference_sws_context = sws_getContext(pLocalCodecParameters->width,
-                                               pLocalCodecParameters->height,
-                                               AV_PIX_FMT_YUV420P,
-                                               1920,
-                                               1080,
-                                               AV_PIX_FMT_YUV420P,
-                                               SWS_BICUBIC,
-                                               NULL,
-                                               NULL,
-                                               NULL);
-
-        scaled_pFrame_reference = av_frame_alloc();
-        if (!scaled_pFrame_reference) {
-          fprintf(stderr, "Failed to allocate new frame.");
-          return -1.0;
-        }
-        scaled_pFrame_reference->height = 1080;
-        scaled_pFrame_reference->width = 1920;
-        scaled_pFrame_reference->format = AV_PIX_FMT_YUV420P;
-        if (av_frame_get_buffer(scaled_pFrame_reference, 32)) {
-          fprintf(stderr, "Failed to allocate data buffers for new frame.\n");
+        int err = AllocateHDFrame(pLocalCodecParameters, reference_sws_context, scaled_pFrame_reference);
+        if (err != 0) {
+          fprintf(stderr, "Failed to prepare HD frame for scaling.\n");
           return -1.0;
         }
       }
@@ -226,27 +237,9 @@ float ComputeVmafForEachFrame(const std::string &reference_file,
     // when the stream is a video we store its index, codec parameters and codec
     if (pLocalCodecParameters->codec_type == AVMEDIA_TYPE_VIDEO) {
       if (!IsHDResolution(pLocalCodecParameters)) {
-        test_sws_context = sws_getContext(pLocalCodecParameters->width,
-                                          pLocalCodecParameters->height,
-                                          AV_PIX_FMT_YUV420P,
-                                          1920,
-                                          1080,
-                                          AV_PIX_FMT_YUV420P,
-                                          SWS_BICUBIC,
-                                          NULL,
-                                          NULL,
-                                          NULL);
-
-        scaled_pFrame_test = av_frame_alloc();
-        if (!scaled_pFrame_test) {
-          fprintf(stderr, "Failed to allocate new frame.");
-          return -1.0;
-        }
-        scaled_pFrame_test->height = 1080;
-        scaled_pFrame_test->width = 1920;
-        scaled_pFrame_test->format = AV_PIX_FMT_YUV420P;
-        if (av_frame_get_buffer(scaled_pFrame_test, 32)) {
-          fprintf(stderr, "Failed to allocate data buffers for new frame.\n");
+        int err = AllocateHDFrame(pLocalCodecParameters, test_sws_context, scaled_pFrame_test);
+        if (err != 0) {
+          fprintf(stderr, "Failed to prepare HD frame for scaling.\n");
           return -1.0;
         }
       }
@@ -315,9 +308,13 @@ float ComputeVmafForEachFrame(const std::string &reference_file,
       // Copy the frames into VmafPictures and read them into VmafContext.
       VmafPicture reference_vmaf_picture, test_vmaf_picture;
       if (CopyPictureData(scaled_pFrame_reference, &reference_vmaf_picture, 8) != 0 ||
-          CopyPictureData(scaled_pFrame_test, &test_vmaf_picture, 8) != 0
-          || vmaf_read_pictures(vmaf, &reference_vmaf_picture, &test_vmaf_picture, frame_index) != 0) {
+          CopyPictureData(scaled_pFrame_test, &test_vmaf_picture, 8) != 0) {
         fprintf(stderr, "Error allocating vmaf picture\n");
+        return -1.0;
+      }
+
+      if (vmaf_read_pictures(vmaf, &reference_vmaf_picture, &test_vmaf_picture, frame_index) != 0) {
+        fprintf(stderr, "Error reading vmaf pictures.\n");
         return -1.0;
       }
 
