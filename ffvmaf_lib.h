@@ -8,8 +8,6 @@ extern "C" {
 #include "libswscale/swscale.h"
 }
 
-#include <unordered_map>
-
 int InitializeVmaf(VmafContext *vmaf,
                    VmafModel **model,
                    VmafModelCollection **model_collection,
@@ -30,9 +28,10 @@ float ComputeVmafForEachFrame(const std::string &reference_file,
                               AVPacket *pPacket_test,
                               int8_t *video_stream_index_reference,
                               int8_t *video_stream_index_test,
-                              std::unordered_map <uint8_t, int64_t> &frame_timestamps,
+                              SwsContext* display_frame_sws_context,
+                              AVFrame *display_frame,
                               VmafContext *vmaf,
-                              VmafModel *model, uintptr_t output_buffer);
+                              VmafModel *model, uintptr_t frame_buffer, uintptr_t output_buffer);
 
 int GetFrameAtTimestamp(AVFormatContext *pFormatContext,
                         AVCodecContext *pCodecContext,

@@ -7,7 +7,7 @@ extern "C" {
 #include "libswscale/swscale.h"
 }
 
-#include <string>
+#include <cmath>
 
 static int decode_packet(AVPacket *pPacket, AVCodecContext *pCodecContext,
                          AVFrame *pFrame);
@@ -142,10 +142,25 @@ static int CopyPictureData(AVFrame *src, VmafPicture *dst, unsigned bpc) {
     for (unsigned j = 0; j < dst->h[i]; j++) {
       memcpy(dst_data, src_data, sizeof(*dst_data) * dst->w[i]);
       src_data += src->linesize[i];
-      dst_data += dst->stride[i];
+      dst_data += src->linesize[i];
     }
   }
 
+  return 0;
+}
+
+static int CopyFrameToBuffer(AVFrame *display_frame, uint8_t *frame_buffer) {
+  uint8_t *dst = frame_buffer;
+  for (unsigned i = 0; i < 3; i++) {
+    uint8_t *src_data = (uint8_t *) display_frame->data[i];
+    printf("Display frame has height %d\n", display_frame->height);
+    for (unsigned j = 0; j < display_frame->height; j++) {
+      memcpy(dst, src_data, sizeof(*frame_buffer) * display_frame->width);
+      src_data += display_frame->linesize[i];
+      dst += display_frame->linesize[i];
+      printf("Line size is %d\n", display_frame->linesize[i]);
+    }
+  }
   return 0;
 }
 
@@ -165,9 +180,11 @@ float ComputeVmafForEachFrame(const std::string &reference_file,
                               AVPacket *pPacket_test,
                               int8_t *video_stream_index_reference,
                               int8_t *video_stream_index_test,
-                              std::unordered_map <uint8_t, int64_t> &frame_timestamps,
+                              SwsContext *display_frame_sws_context,
+                              AVFrame *display_frame,
                               VmafContext *vmaf,
                               VmafModel *model,
+                              uintptr_t frame_buffer,
                               uintptr_t output_buffer) {
 
   if (avformat_open_input(&pFormatContext_reference, reference_file.c_str(), NULL, NULL) != 0
@@ -309,6 +326,13 @@ float ComputeVmafForEachFrame(const std::string &reference_file,
           CopyPictureData(scaled_pFrame_test, &test_vmaf_picture, 8) != 0) {
         fprintf(stderr, "Error allocating vmaf picture\n");
         return -1.0;
+      }
+
+      // Copy to display frame
+      if (frame_index == 0) {
+       // ScaleFrame(display_frame_sws_context, display_frame, scaled_pFrame_reference);
+        uint8_t *frame_buffer_ptr = reinterpret_cast<uint8_t *>(frame_buffer);
+        CopyFrameToBuffer(scaled_pFrame_reference, frame_buffer_ptr);
       }
 
       if (vmaf_read_pictures(vmaf, &reference_vmaf_picture, &test_vmaf_picture, frame_index) != 0) {

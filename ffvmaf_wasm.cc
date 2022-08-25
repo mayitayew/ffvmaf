@@ -29,9 +29,8 @@ AVPacket *pPacket_reference;
 AVPacket *pPacket_test;
 int8_t *video_stream_index_reference;
 int8_t *video_stream_index_test;
-
-// Frame number to timestamp mapping.
-std::unordered_map <uint8_t, int64_t> frame_timestamps;
+AVFrame *display_frame;
+SwsContext *display_frame_sws_context;
 
 /* Prepare the in-memory buffer and loaders for VMAF models. */
 VmafModelBuffer vmaf_model_buffer({"vmaf_v0.6.1neg.json", "vmaf_v0.6.1.json"}, "https://localhost:3000/models/");
@@ -88,7 +87,30 @@ int main(int argc, char **argv) {
   }
   *video_stream_index_reference = -1;
   *video_stream_index_test = -1;
-  frame_timestamps.reserve(100);
+
+  display_frame_sws_context = sws_getContext(1920,
+                                             1080,
+                                             AV_PIX_FMT_YUV420P,
+                                             480,
+                                             360,
+                                             AV_PIX_FMT_RGB0,
+                                             SWS_BICUBIC,
+                                             NULL,
+                                             NULL,
+                                             NULL);
+
+  display_frame = av_frame_alloc();
+  if (!display_frame) {
+    fprintf(stderr, "Failed to allocate display frame.");
+    return -1;
+  }
+  display_frame->height = 1080;
+  display_frame->width = 1920;
+  display_frame->format = AV_PIX_FMT_RGB0;
+  if (av_frame_get_buffer(display_frame, 32)) {
+    fprintf(stderr, "Failed to allocate data buffers for display frame.\n");
+    return -1;
+  }
 
   // Initailize the VMAF context.
   int err = vmaf_init(&vmaf, cfg);
@@ -114,13 +136,18 @@ int main(int argc, char **argv) {
 
 std::string GetVmafVersion() { return std::string(vmaf_version()); }
 
-void ComputeVmaf(const std::string &reference_file, const std::string &test_file, uintptr_t output_buffer, bool use_phone_model, bool use_neg_mode) {
+void ComputeVmaf(const std::string &reference_file,
+                 const std::string &test_file,
+                 uintptr_t frame_buffer,
+                 uintptr_t output_buffer,
+                 bool use_phone_model,
+                 bool use_neg_mode) {
 
-    const char* model_name = use_neg_mode ? "vmaf_v0.6.1neg.json" : "vmaf_v0.6.1.json";
-    InitializeVmaf(vmaf, model, model_collection, &model_collection_count,
-                  vmaf_model_buffer.GetBuffer(model_name),
-                  vmaf_model_buffer.GetBufferSize(model_name), use_phone_model);
-    ComputeVmafForEachFrame(reference_file,
+  const char *model_name = use_neg_mode ? "vmaf_v0.6.1neg.json" : "vmaf_v0.6.1.json";
+  InitializeVmaf(vmaf, model, model_collection, &model_collection_count,
+                 vmaf_model_buffer.GetBuffer(model_name),
+                 vmaf_model_buffer.GetBufferSize(model_name), use_phone_model);
+  ComputeVmafForEachFrame(reference_file,
                           test_file,
                           pFormatContext_reference,
                           pFormatContext_test,
@@ -132,20 +159,12 @@ void ComputeVmaf(const std::string &reference_file, const std::string &test_file
                           pPacket_test,
                           video_stream_index_reference,
                           video_stream_index_test,
-                          frame_timestamps,
+                          display_frame_sws_context,
+                          display_frame,
                           vmaf,
                           model[0],
-                            output_buffer);
-}
-
-int GetFramesAtIndex(uint8_t index, uintptr_t reference_frame, uintptr_t test_frame) {
-  return GetFrameAtTimestamp(pFormatContext_reference,
-                      pCodecContext_reference,
-                      pFrame_reference,
-                      pPacket_reference,
-                      *video_stream_index_reference,
-                      frame_timestamps[index],
-                      reference_frame);
+                          frame_buffer,
+                          output_buffer);
 }
 
 // The functions below are exposed in the wasm module.
