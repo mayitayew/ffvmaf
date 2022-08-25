@@ -65,9 +65,9 @@ int GetNextFrame(AVFormatContext *pFormatContext,
                  int8_t video_stream_index) {
   while (av_read_frame(pFormatContext, pPacket) >= 0) {
     if (pPacket->stream_index == video_stream_index) {
-      printf("AVPacket->pts %"
-      PRId64, pPacket->pts);
-      printf("\n");
+//      printf("AVPacket->pts %"
+//      PRId64, pPacket->pts);
+//      printf("\n");
       // decode_packet returns the number of frames decoded, or a negative value on error.
       int response = decode_packet(pPacket, pCodecContext, pFrame);
       if (response == 0) {
@@ -290,8 +290,6 @@ float ComputeVmafForEachFrame(const std::string &reference_file,
   const time_t t0 = clock();
   for (frame_index = 0; frame_index < num_frames_to_process; frame_index++) {
 
-    output_buffer_ptr[1] = (float) frame_index;
-
     bool reference_frame_decoded =
         (GetNextFrame(pFormatContext_reference, pCodecContext_reference, pPacket_reference, pFrame_reference,
                       *video_stream_index_reference) == 1);
@@ -328,16 +326,19 @@ float ComputeVmafForEachFrame(const std::string &reference_file,
           return -1.0;
         }
         output_buffer_ptr[3 + frame_index_for_vmaf] = vmaf_score;
-        printf("Frame %d: vmaf score %f\n", frame_index_for_vmaf, vmaf_score);
+        //printf("Frame %d: vmaf score %f\n", frame_index_for_vmaf, vmaf_score);
       }
 
       // Compute and store FPS.
-      if (frame_index % 5 == 0) {
+      if (frame_index != 0 && frame_index % 5 == 0) {
         fps = (frame_index + 1) /
             (((float) clock() - t0) / CLOCKS_PER_SEC);
         printf("Computing at a rate of %f fps\n", fps);
         output_buffer_ptr[2] = fps;
       }
+
+      const unsigned num_frames_processed = frame_index + 1;
+      output_buffer_ptr[1] = num_frames_processed;
 
     } else {
       fprintf(stderr, "Decoding failed before end of files.\n");
@@ -383,7 +384,6 @@ static int decode_packet(AVPacket *pPacket, AVCodecContext *pCodecContext,
     } else if (response < 0) {
       return response;
     }
-    printf("Parsed a frame from the packet.\n");
     num_frames++;
   }
   return num_frames;
