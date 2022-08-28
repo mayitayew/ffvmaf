@@ -142,23 +142,20 @@ static int CopyPictureData(AVFrame *src, VmafPicture *dst, unsigned bpc) {
     for (unsigned j = 0; j < dst->h[i]; j++) {
       memcpy(dst_data, src_data, sizeof(*dst_data) * dst->w[i]);
       src_data += src->linesize[i];
-      dst_data += src->linesize[i];
+      dst_data += dst->stride[i];
     }
   }
 
   return 0;
 }
 
-static int CopyFrameToBuffer(AVFrame *display_frame, uint8_t *frame_buffer) {
-  uint8_t *dst = frame_buffer;
+static int CopyFrameToBuffer(AVFrame *frame, uint8_t *buffer) {
   for (unsigned i = 0; i < 3; i++) {
-    uint8_t *src_data = (uint8_t *) display_frame->data[i];
-    printf("Display frame has height %d\n", display_frame->height);
-    for (unsigned j = 0; j < display_frame->height; j++) {
-      memcpy(dst, src_data, sizeof(*frame_buffer) * display_frame->width);
-      src_data += display_frame->linesize[i];
-      dst += display_frame->linesize[i];
-      printf("Line size is %d\n", display_frame->linesize[i]);
+    uint8_t *frame_data = (uint8_t *) frame->data[i];
+    for (unsigned j = 0; j < frame->height; j++) {
+      memcpy(buffer, frame_data, sizeof(*buffer) * frame->linesize[i]);
+      frame_data += frame->linesize[i];
+      buffer += frame->linesize[i];
     }
   }
   return 0;
@@ -181,10 +178,16 @@ float ComputeVmafForEachFrame(const std::string &reference_file,
                               int8_t *video_stream_index_reference,
                               int8_t *video_stream_index_test,
                               SwsContext *display_frame_sws_context,
-                              AVFrame *display_frame,
+                              AVFrame *max_score_ref_frame,
+                              AVFrame *max_score_test_frame,
+                              AVFrame *min_score_ref_frame,
+                              AVFrame *min_score_test_frame,
                               VmafContext *vmaf,
                               VmafModel *model,
-                              uintptr_t frame_buffer,
+                              uintptr_t max_score_ref_frame_buffer,
+                              uintptr_t max_score_test_frame_buffer,
+                              uintptr_t min_score_ref_frame_buffer,
+                              uintptr_t min_score_test_frame_buffer,
                               uintptr_t output_buffer) {
 
   if (avformat_open_input(&pFormatContext_reference, reference_file.c_str(), NULL, NULL) != 0
@@ -305,6 +308,8 @@ float ComputeVmafForEachFrame(const std::string &reference_file,
   const unsigned num_frames_to_process = std::min(num_common_frames, (unsigned) 100000);
   float fps = 0;
   const time_t t0 = clock();
+  double max_vmaf_score = 0.0;
+  double min_vmaf_score = 100.0;
   for (frame_index = 0; frame_index < num_frames_to_process; frame_index++) {
 
     bool reference_frame_decoded =
@@ -328,20 +333,13 @@ float ComputeVmafForEachFrame(const std::string &reference_file,
         return -1.0;
       }
 
-      // Copy to display frame
-      if (frame_index == 0) {
-       // ScaleFrame(display_frame_sws_context, display_frame, scaled_pFrame_reference);
-        uint8_t *frame_buffer_ptr = reinterpret_cast<uint8_t *>(frame_buffer);
-        CopyFrameToBuffer(scaled_pFrame_reference, frame_buffer_ptr);
-      }
-
       if (vmaf_read_pictures(vmaf, &reference_vmaf_picture, &test_vmaf_picture, frame_index) != 0) {
         fprintf(stderr, "Error reading vmaf pictures.\n");
         return -1.0;
       }
 
       // Compute the vmaf score at index. The score is computed for the frame_index_for_vmaf'th frame.
-      double vmaf_score;
+      double vmaf_score = -1.0;
       if (frame_index >= 2) {
         frame_index_for_vmaf = frame_index - 2;
         int err = vmaf_score_at_index(vmaf, model, &vmaf_score, frame_index_for_vmaf);
@@ -361,16 +359,48 @@ float ComputeVmafForEachFrame(const std::string &reference_file,
         output_buffer_ptr[2] = fps;
       }
 
+      // If the frame's vmaf score is max seen so far, copy the frame into buffer for display.
+      if (vmaf_score > max_vmaf_score) {
+        ScaleFrame(display_frame_sws_context, max_score_ref_frame, scaled_pFrame_reference);
+        uint8_t *buffer_ptr = reinterpret_cast<uint8_t *>(max_score_ref_frame_buffer);
+        CopyFrameToBuffer(max_score_ref_frame, buffer_ptr);
+
+        ScaleFrame(display_frame_sws_context, max_score_test_frame, scaled_pFrame_test);
+        buffer_ptr = reinterpret_cast<uint8_t *>(max_score_test_frame_buffer);
+        CopyFrameToBuffer(max_score_test_frame, buffer_ptr);
+
+        max_vmaf_score = vmaf_score;
+      }
+
+      // If the frame's vmaf score is the min seen so far, copy the frame into buffer for display.
+      if (vmaf_score >= 0.0 && vmaf_score < min_vmaf_score) {
+        ScaleFrame(display_frame_sws_context, min_score_ref_frame, scaled_pFrame_reference);
+        uint8_t *buffer_ptr = reinterpret_cast<uint8_t *>(min_score_ref_frame_buffer);
+        CopyFrameToBuffer(min_score_ref_frame, buffer_ptr);
+
+        ScaleFrame(display_frame_sws_context, min_score_test_frame, scaled_pFrame_test);
+        buffer_ptr = reinterpret_cast<uint8_t *>(min_score_test_frame_buffer);
+        CopyFrameToBuffer(min_score_test_frame, buffer_ptr);
+
+        min_vmaf_score = vmaf_score;
+      }
+
       const unsigned num_frames_processed = frame_index + 1;
       output_buffer_ptr[1] = num_frames_processed;
 
+    } else if (!reference_frame_decoded && !test_frame_decoded) {
+      printf("Decoding the next frame failed for both test and ref where frame index is %d.\n", frame_index);
+      break;
+    } else if (!reference_frame_decoded) {
+      printf("Decoding the next frame failed for ref where frame index is %d.\n", frame_index);
+      break;
     } else {
-      fprintf(stderr, "Decoding failed before end of files.\n");
+      printf("Decoding the next frame failed for test where frame index is %d.\n", frame_index);
       break;
     }
   }
 
-  // Flush the VMAF context and compute the pooled VMAF score.
+// Flush the VMAF context and compute the pooled VMAF score.
   if (vmaf_read_pictures(vmaf, NULL, NULL, 0)) {
     fprintf(stderr, "Problem flushing VMAF context.\n");
     return -1.0;

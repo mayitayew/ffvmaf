@@ -29,7 +29,12 @@ AVPacket *pPacket_reference;
 AVPacket *pPacket_test;
 int8_t *video_stream_index_reference;
 int8_t *video_stream_index_test;
-AVFrame *display_frame;
+
+AVFrame *max_score_ref_frame;
+AVFrame *max_score_test_frame;
+AVFrame *min_score_ref_frame;
+AVFrame *min_score_test_frame;
+
 SwsContext *display_frame_sws_context;
 
 /* Prepare the in-memory buffer and loaders for VMAF models. */
@@ -60,6 +65,22 @@ void asyncDownload(const std::string &url, const std::string &model_name) {
   attr.onsuccess = downloadSucceeded;
   attr.onerror = downloadFailed;
   emscripten_fetch(&attr, url.c_str());
+}
+
+int AllocateFrameForDisplay(AVFrame *&frame) {
+  frame = av_frame_alloc();
+  if (!frame) {
+    fprintf(stderr, "Failed to allocate display frame.");
+    return -1;
+  }
+  frame->width = 480;
+  frame->height = 360;
+  frame->format = AV_PIX_FMT_RGB0;
+  if (av_frame_get_buffer(frame, 32)) {
+    fprintf(stderr, "Failed to allocate data buffers for display frame.\n");
+    return -1;
+  }
+  return 0;
 }
 
 int main(int argc, char **argv) {
@@ -99,16 +120,9 @@ int main(int argc, char **argv) {
                                              NULL,
                                              NULL);
 
-  display_frame = av_frame_alloc();
-  if (!display_frame) {
-    fprintf(stderr, "Failed to allocate display frame.");
-    return -1;
-  }
-  display_frame->height = 1080;
-  display_frame->width = 1920;
-  display_frame->format = AV_PIX_FMT_RGB0;
-  if (av_frame_get_buffer(display_frame, 32)) {
-    fprintf(stderr, "Failed to allocate data buffers for display frame.\n");
+  if (AllocateFrameForDisplay(max_score_ref_frame) || AllocateFrameForDisplay(max_score_test_frame)
+      || AllocateFrameForDisplay(min_score_ref_frame) || AllocateFrameForDisplay(min_score_test_frame)) {
+    fprintf(stderr, "Failed to allocate frames for display.\n");
     return -1;
   }
 
@@ -138,7 +152,10 @@ std::string GetVmafVersion() { return std::string(vmaf_version()); }
 
 void ComputeVmaf(const std::string &reference_file,
                  const std::string &test_file,
-                 uintptr_t frame_buffer,
+                 uintptr_t max_score_ref_frame_buffer,
+                 uintptr_t max_score_test_frame_buffer,
+                 uintptr_t min_score_ref_frame_buffer,
+                 uintptr_t min_score_test_frame_buffer,
                  uintptr_t output_buffer,
                  bool use_phone_model,
                  bool use_neg_mode) {
@@ -160,10 +177,16 @@ void ComputeVmaf(const std::string &reference_file,
                           video_stream_index_reference,
                           video_stream_index_test,
                           display_frame_sws_context,
-                          display_frame,
+                          max_score_ref_frame,
+                          max_score_test_frame,
+                          min_score_ref_frame,
+                          min_score_test_frame,
                           vmaf,
                           model[0],
-                          frame_buffer,
+                          max_score_ref_frame_buffer,
+                          max_score_test_frame_buffer,
+                          min_score_ref_frame_buffer,
+                          min_score_test_frame_buffer,
                           output_buffer);
 }
 
