@@ -21,14 +21,10 @@ uint64_t model_collection_count;
 /* Declare libav{format, util, codec} specific global variables. */
 AVFormatContext *pFormatContext_reference;
 AVFormatContext *pFormatContext_test;
-AVCodecContext *pCodecContext_reference;
-AVCodecContext *pCodecContext_test;
 AVFrame *pFrame_reference;
 AVFrame *pFrame_test;
 AVPacket *pPacket_reference;
 AVPacket *pPacket_test;
-int8_t *video_stream_index_reference;
-int8_t *video_stream_index_test;
 
 AVFrame *max_score_ref_frame;
 AVFrame *max_score_test_frame;
@@ -106,8 +102,6 @@ int main(int argc, char **argv) {
     fprintf(stderr, "failed to allocate memory for AVPacket\n");
     return -1;
   }
-  *video_stream_index_reference = -1;
-  *video_stream_index_test = -1;
 
   display_frame_sws_context = sws_getContext(1920,
                                              1080,
@@ -168,14 +162,10 @@ void ComputeVmaf(const std::string &reference_file,
                           test_file,
                           pFormatContext_reference,
                           pFormatContext_test,
-                          pCodecContext_reference,
-                          pCodecContext_test,
                           pFrame_reference,
                           pFrame_test,
                           pPacket_reference,
                           pPacket_test,
-                          video_stream_index_reference,
-                          video_stream_index_test,
                           display_frame_sws_context,
                           max_score_ref_frame,
                           max_score_test_frame,
@@ -188,6 +178,7 @@ void ComputeVmaf(const std::string &reference_file,
                           min_score_ref_frame_buffer,
                           min_score_test_frame_buffer,
                           output_buffer);
+  vmaf_close(vmaf);
 }
 
 // The functions below are exposed in the wasm module.
