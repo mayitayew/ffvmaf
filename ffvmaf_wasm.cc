@@ -34,7 +34,7 @@ AVFrame *min_score_test_frame;
 SwsContext *display_frame_sws_context;
 
 /* Prepare the in-memory buffer and loaders for VMAF models. */
-VmafModelBuffer vmaf_model_buffer({"vmaf_v0.6.1neg.json", "vmaf_v0.6.1.json"}, "https://localhost:3000/models/");
+VmafModelBuffer vmaf_model_buffer({"vmaf_v0.6.1neg.json", "vmaf_v0.6.1.json"}, "https://vmaf.web/models/");
 
 void downloadSucceeded(emscripten_fetch_t *fetch) {
   const char *model_name = static_cast<char *>(fetch->userData);

@@ -516,7 +516,6 @@ float ComputeVmafForEachFrame(const std::string &reference_file,
       if (frame_index != 0 && frame_index % 5 == 0) {
         fps = (frame_index + 1) /
             (((float) clock() - t0) / CLOCKS_PER_SEC);
-        printf("Computing at a rate of %f fps\n", fps);
         output.SetFPS(fps);
       }
 
