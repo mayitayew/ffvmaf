@@ -287,6 +287,16 @@ class OutputBuffer {
     return buffer_[4 + num_frames_to_process] = pooled_vmaf_score;
   }
 
+  bool SetMaxVmafScore(const double max_vmaf_score) {
+    const unsigned num_frames_to_process = (unsigned) buffer_[0];
+    return buffer_[5 + num_frames_to_process] = max_vmaf_score;
+  }
+
+  bool SetMinVmafScore(const double min_vmaf_score) {
+    const unsigned num_frames_to_process = (unsigned) buffer_[0];
+    return buffer_[6 + num_frames_to_process] = min_vmaf_score;
+  }
+
  private:
   float *buffer_;
 };
@@ -550,6 +560,9 @@ float ComputeVmafForEachFrame(const std::string &reference_file,
       break;
     }
   }
+
+  output.SetMaxVmafScore(max_vmaf_score);
+  output.SetMinVmafScore(min_vmaf_score);
 
   // Flush the VMAF context and compute the pooled VMAF score.
   double pooled_vmaf_score = 0;
