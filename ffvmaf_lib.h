@@ -18,12 +18,6 @@ int InitializeVmaf(VmafContext *vmaf,
 
 float ComputeVmafForEachFrame(const std::string &reference_file,
                               const std::string &test_file,
-                              AVFormatContext *pFormatContext_reference,
-                              AVFormatContext *pFormatContext_test,
-                              AVFrame *pFrame_reference,
-                              AVFrame *pFrame_test,
-                              AVPacket *pPacket_reference,
-                              AVPacket *pPacket_test,
                               SwsContext *display_frame_sws_context,
                               AVFrame *max_score_ref_frame,
                               AVFrame *max_score_test_frame,
@@ -35,13 +29,5 @@ float ComputeVmafForEachFrame(const std::string &reference_file,
                               uintptr_t max_score_test_frame_buffer,
                               uintptr_t min_score_ref_frame_buffer,
                               uintptr_t min_score_test_frame_buffer, uintptr_t output_buffer);
-
-int GetFrameAtTimestamp(AVFormatContext *pFormatContext,
-                        AVCodecContext *pCodecContext,
-                        AVFrame *pFrame,
-                        AVPacket *pPacket,
-                        int8_t video_stream_index,
-                        int64_t timestamp,
-                        uintptr_t frame);
 
 #endif // FFVMAF_LIB_H

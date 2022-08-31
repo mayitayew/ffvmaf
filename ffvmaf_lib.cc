@@ -69,7 +69,7 @@ int InitializeVmaf(VmafContext *vmaf,
       return -1;
     }
 
-    printf("Incrmenting model collection count.\n");
+    printf("Incrementing model collection count.\n");
     *model_collection_count = *model_collection_count + 1;
   }
 
@@ -180,6 +180,26 @@ static int AllocateHDFrame(const AVCodecParameters *pCodec_parameters,
   return 0;
 }
 
+static int AllocateFramesAndPackets(AVFrame *&pFrame_reference,
+                                    AVFrame *&pFrame_test,
+                                    AVPacket *&pPacket_reference,
+                                    AVPacket *&pPacket_test) {
+  pFrame_reference = av_frame_alloc();
+  pFrame_test = av_frame_alloc();
+  if (!pFrame_reference || !pFrame_test) {
+    fprintf(stderr, "failed to allocate memory for AVFrame\n");
+    return -1;
+  }
+
+  pPacket_reference = av_packet_alloc();
+  pPacket_test = av_packet_alloc();
+  if (!pPacket_reference || !pPacket_test) {
+    fprintf(stderr, "failed to allocate memory for AVPacket\n");
+    return -1;
+  }
+  return 0;
+}
+
 static int CopyPictureData(AVFrame *src, VmafPicture *dst, unsigned bpc) {
   int err = vmaf_picture_alloc(dst, VMAF_PIX_FMT_YUV420P, bpc,
                                src->width, src->height);
@@ -217,15 +237,38 @@ bool IsHDResolution(const AVCodecParameters *codec_parameters) {
   return codec_parameters->height == 1080 && codec_parameters->width == 1920;
 }
 
-void FreeResources(SwsContext *reference_sws_context,
+void FreeResources(AVFormatContext *pFormatContext_reference,
+                   AVFormatContext *pFormatContext_test,
+                   SwsContext *reference_sws_context,
                    SwsContext *test_sws_context,
+                   AVFrame *pFrame_reference,
+                   AVFrame *pFrame_test,
+                   AVPacket *pPacket_reference,
+                   AVPacket *pPacket_test,
                    AVFrame *scaled_pFrame_reference,
                    AVFrame *scaled_pFrame_test,
                    AVCodecContext *pCodecContext_reference = NULL,
                    AVCodecContext *pCodecContext_test = NULL) {
-  printf("Freeing resources...\n");
+  if (pFormatContext_reference != NULL)
+    avformat_close_input(&pFormatContext_reference);
+
+  if (pFormatContext_test != NULL)
+    avformat_close_input(&pFormatContext_test);
+
   sws_freeContext(reference_sws_context);
   sws_freeContext(test_sws_context);
+
+  if (pFrame_reference != NULL)
+    av_frame_free(&pFrame_reference);
+
+  if (pFrame_test != NULL)
+    av_frame_free(&pFrame_test);
+
+  if (pPacket_reference != NULL)
+    av_packet_free(&pPacket_reference);
+
+  if (pPacket_test != NULL)
+    av_packet_free(&pPacket_test);
 
   if (scaled_pFrame_reference != NULL)
     av_frame_free(&scaled_pFrame_reference);
@@ -303,12 +346,6 @@ class OutputBuffer {
 
 float ComputeVmafForEachFrame(const std::string &reference_file,
                               const std::string &test_file,
-                              AVFormatContext *pFormatContext_reference,
-                              AVFormatContext *pFormatContext_test,
-                              AVFrame *pFrame_reference,
-                              AVFrame *pFrame_test,
-                              AVPacket *pPacket_reference,
-                              AVPacket *pPacket_test,
                               SwsContext *display_frame_sws_context,
                               AVFrame *max_score_ref_frame,
                               AVFrame *max_score_test_frame,
@@ -322,7 +359,14 @@ float ComputeVmafForEachFrame(const std::string &reference_file,
                               uintptr_t min_score_test_frame_buffer,
                               uintptr_t output_buffer) {
 
-  // Open and initialize AVFormatContexts.
+  // Allocate AVFormatContexts and initialize them below.
+  AVFormatContext *pFormatContext_reference = avformat_alloc_context();
+  AVFormatContext *pFormatContext_test = avformat_alloc_context();
+  if (!pFormatContext_reference || !pFormatContext_test) {
+    fprintf(stderr, "ERROR could not allocate memory for format contexts\n");
+    return -1.0;
+  }
+
   if (avformat_open_input(&pFormatContext_reference, reference_file.c_str(), NULL, NULL) != 0
       || avformat_open_input(&pFormatContext_test, test_file.c_str(), NULL, NULL) != 0) {
     fprintf(stderr, "ERROR could not open file.\n");
@@ -340,8 +384,12 @@ float ComputeVmafForEachFrame(const std::string &reference_file,
   int8_t video_stream_index_test = -1;
   SwsContext *reference_sws_context = NULL;
   SwsContext *test_sws_context = NULL;
+  AVFrame *pFrame_reference = NULL;
+  AVFrame *pFrame_test = NULL;
   AVFrame *scaled_pFrame_reference = NULL;
   AVFrame *scaled_pFrame_test = NULL;
+  AVPacket *pPacket_reference = NULL;
+  AVPacket *pPacket_test = NULL;
   AVCodecContext *pCodecContext_reference = NULL;
   AVCodecContext *pCodecContext_test = NULL;
   AVCodec *pCodec_reference = NULL;
@@ -405,10 +453,33 @@ float ComputeVmafForEachFrame(const std::string &reference_file,
     }
   }
 
+  if (AllocateFramesAndPackets(pFrame_reference, pFrame_test, pPacket_reference, pPacket_test) != 0) {
+    FreeResources(pFormatContext_reference,
+                  pFormatContext_test,
+                  reference_sws_context,
+                  test_sws_context,
+                  pFrame_reference,
+                  pFrame_test,
+                  pPacket_reference,
+                  pPacket_test,
+                  scaled_pFrame_reference,
+                  scaled_pFrame_test);
+    return -1.0;
+  }
+
   // Return if a video stream was not found for one or both videos. Free the initialized resources before returning.
   if (video_stream_index_reference == -1 || video_stream_index_test == -1) {
     fprintf(stderr, "One of the files does not contain a video stream!\n");
-    FreeResources(reference_sws_context, test_sws_context, scaled_pFrame_reference, scaled_pFrame_test);
+    FreeResources(pFormatContext_reference,
+                  pFormatContext_test,
+                  reference_sws_context,
+                  test_sws_context,
+                  pFrame_reference,
+                  pFrame_test,
+                  pPacket_reference,
+                  pPacket_test,
+                  scaled_pFrame_reference,
+                  scaled_pFrame_test);
     return -1.0;
   }
 
@@ -419,8 +490,14 @@ float ComputeVmafForEachFrame(const std::string &reference_file,
                                    pCodecParameters_test,
                                    pCodec_reference,
                                    pCodec_test) != 0) {
-    FreeResources(reference_sws_context,
+    FreeResources(pFormatContext_reference,
+                  pFormatContext_test,
+                  reference_sws_context,
                   test_sws_context,
+                  pFrame_reference,
+                  pFrame_test,
+                  pPacket_reference,
+                  pPacket_test,
                   scaled_pFrame_reference,
                   scaled_pFrame_test,
                   pCodecContext_reference,
@@ -448,8 +525,14 @@ float ComputeVmafForEachFrame(const std::string &reference_file,
     if (output.IsTerminationBitSet()) {
       printf("Cancelling compute...\n");
       output.ClearTerminationBit();
-      FreeResources(reference_sws_context,
+      FreeResources(pFormatContext_reference,
+                    pFormatContext_test,
+                    reference_sws_context,
                     test_sws_context,
+                    pFrame_reference,
+                    pFrame_test,
+                    pPacket_reference,
+                    pPacket_test,
                     scaled_pFrame_reference,
                     scaled_pFrame_test,
                     pCodecContext_reference,
@@ -474,8 +557,14 @@ float ComputeVmafForEachFrame(const std::string &reference_file,
       VmafPicture reference_vmaf_picture, test_vmaf_picture;
       if (CopyPictureData(scaled_pFrame_reference, &reference_vmaf_picture, 8) != 0 ||
           CopyPictureData(scaled_pFrame_test, &test_vmaf_picture, 8) != 0) {
-        FreeResources(reference_sws_context,
+        FreeResources(pFormatContext_reference,
+                      pFormatContext_test,
+                      reference_sws_context,
                       test_sws_context,
+                      pFrame_reference,
+                      pFrame_test,
+                      pPacket_reference,
+                      pPacket_test,
                       scaled_pFrame_reference,
                       scaled_pFrame_test,
                       pCodecContext_reference,
@@ -485,8 +574,14 @@ float ComputeVmafForEachFrame(const std::string &reference_file,
 
       if (vmaf_read_pictures(vmaf, &reference_vmaf_picture, &test_vmaf_picture, frame_index) != 0) {
         fprintf(stderr, "Error reading vmaf pictures.\n");
-        FreeResources(reference_sws_context,
+        FreeResources(pFormatContext_reference,
+                      pFormatContext_test,
+                      reference_sws_context,
                       test_sws_context,
+                      pFrame_reference,
+                      pFrame_test,
+                      pPacket_reference,
+                      pPacket_test,
                       scaled_pFrame_reference,
                       scaled_pFrame_test,
                       pCodecContext_reference,
@@ -501,8 +596,14 @@ float ComputeVmafForEachFrame(const std::string &reference_file,
         int err = vmaf_score_at_index(vmaf, model, &vmaf_score, frame_index_for_vmaf);
         if (err != 0) {
           fprintf(stderr, "Error computing vmaf score at index\n");
-          FreeResources(reference_sws_context,
+          FreeResources(pFormatContext_reference,
+                        pFormatContext_test,
+                        reference_sws_context,
                         test_sws_context,
+                        pFrame_reference,
+                        pFrame_test,
+                        pPacket_reference,
+                        pPacket_test,
                         scaled_pFrame_reference,
                         scaled_pFrame_test,
                         pCodecContext_reference,
@@ -568,8 +669,14 @@ float ComputeVmafForEachFrame(const std::string &reference_file,
   if (vmaf_read_pictures(vmaf, NULL, NULL, 0) != 0
       || vmaf_score_pooled(vmaf, model, VMAF_POOL_METHOD_MEAN, &pooled_vmaf_score, 0, frame_index - 2) != 0) {
     fprintf(stderr, "Problem flushing VMAF context.\n");
-    FreeResources(reference_sws_context,
+    FreeResources(pFormatContext_reference,
+                  pFormatContext_test,
+                  reference_sws_context,
                   test_sws_context,
+                  pFrame_reference,
+                  pFrame_test,
+                  pPacket_reference,
+                  pPacket_test,
                   scaled_pFrame_reference,
                   scaled_pFrame_test,
                   pCodecContext_reference,
@@ -579,8 +686,14 @@ float ComputeVmafForEachFrame(const std::string &reference_file,
 
   printf("Pooled VMAF score: %f\n", pooled_vmaf_score);
   output.SetPooledVmafScore(pooled_vmaf_score);
-  FreeResources(reference_sws_context,
+  FreeResources(pFormatContext_reference,
+                pFormatContext_test,
+                reference_sws_context,
                 test_sws_context,
+                pFrame_reference,
+                pFrame_test,
+                pPacket_reference,
+                pPacket_test,
                 scaled_pFrame_reference,
                 scaled_pFrame_test,
                 pCodecContext_reference,
