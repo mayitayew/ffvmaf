@@ -16,7 +16,7 @@ int InitializeVmaf(VmafContext *vmaf,
                    uint64_t model_buffer_size,
                    bool use_phone_model);
 
-int ComputeVmafForEachFrame(const std::string &reference_file,
+float ComputeVmafForEachFrame(const std::string &reference_file,
                               const std::string &test_file,
                               SwsContext *display_frame_sws_context,
                               AVFrame *max_score_ref_frame,
