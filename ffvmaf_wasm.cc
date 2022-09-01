@@ -61,7 +61,7 @@ int main(int argc, char **argv) {
 
 std::string GetVmafVersion() { return std::string(vmaf_version()); }
 
-void ComputeVmaf(const std::string &reference_file,
+int ComputeVmaf(const std::string &reference_file,
                  const std::string &test_file,
                  uintptr_t max_score_ref_frame_buffer,
                  uintptr_t max_score_test_frame_buffer,
@@ -91,7 +91,7 @@ void ComputeVmaf(const std::string &reference_file,
   if (AllocateFrameForDisplay(max_score_ref_frame) || AllocateFrameForDisplay(max_score_test_frame)
       || AllocateFrameForDisplay(min_score_ref_frame) || AllocateFrameForDisplay(min_score_test_frame)) {
     fprintf(stderr, "Failed to allocate frames for display.\n");
-    return;
+    return -1;
   }
 
   // Initailize the VMAF context.
@@ -107,7 +107,7 @@ void ComputeVmaf(const std::string &reference_file,
   int err = vmaf_init(&vmaf, cfg);
   if (err) {
     fprintf(stderr, "Failed to initialize VMAF context. error code: %d\n", err);
-    return;
+    return -1;
   }
 
   // Prepare the vmaf model object.
@@ -126,7 +126,7 @@ void ComputeVmaf(const std::string &reference_file,
   InitializeVmaf(vmaf, model, model_collection, &model_collection_count,
                  vmaf_model_buffer.GetBuffer(model_name),
                  vmaf_model_buffer.GetBufferSize(model_name), use_phone_model);
-  ComputeVmafForEachFrame(reference_file,
+  int compute_return_value = ComputeVmafForEachFrame(reference_file,
                           test_file,
                           display_frame_sws_context,
                           max_score_ref_frame,
@@ -156,6 +156,7 @@ void ComputeVmaf(const std::string &reference_file,
   free(model_collection);
 
   vmaf_close(vmaf);
+  return compute_return_value;
 }
 
 // The functions below are exposed in the wasm module.
