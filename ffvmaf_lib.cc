@@ -555,8 +555,9 @@ int ComputeVmafForEachFrame(const std::string &reference_file,
 
       // Copy the frames into VmafPictures and read them into VmafContext.
       VmafPicture reference_vmaf_picture, test_vmaf_picture;
-      if (CopyPictureData(scaled_pFrame_reference, &reference_vmaf_picture, 8) != 0 ||
-          CopyPictureData(scaled_pFrame_test, &test_vmaf_picture, 8) != 0) {
+      int ret1 = CopyPictureData(scaled_pFrame_reference, &reference_vmaf_picture, 8);
+      int ret2 = CopyPictureData(scaled_pFrame_test, &test_vmaf_picture, 8);
+      if (ret1 || ret2) {
         FreeResources(pFormatContext_reference,
                       pFormatContext_test,
                       reference_sws_context,
@@ -569,6 +570,10 @@ int ComputeVmafForEachFrame(const std::string &reference_file,
                       scaled_pFrame_test,
                       pCodecContext_reference,
                       pCodecContext_test);
+        if (ret2)
+          vmaf_picture_unref(&reference_vmaf_picture);
+        if (ret1)
+          vmaf_picture_unref(&test_vmaf_picture);
         return 3; // Error during vmaf
       }
 
@@ -652,11 +657,8 @@ int ComputeVmafForEachFrame(const std::string &reference_file,
     } else if (!reference_frame_decoded && !test_frame_decoded) {
       printf("Decoding the next frame failed for both test and ref where frame index is %d.\n", frame_index);
       break;
-    } else if (!reference_frame_decoded) {
-      printf("Decoding the next frame failed for ref where frame index is %d.\n", frame_index);
-      break;
     } else {
-      printf("Decoding the next frame failed for test where frame index is %d.\n", frame_index);
+      printf("Decoding the next frame failed for one stream where frame index is %d.\n", frame_index);
       break;
     }
   }
