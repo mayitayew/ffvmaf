@@ -509,8 +509,7 @@ int ComputeVmafForEachFrame(const std::string &reference_file,
                                                         pFormatContext_test,
                                                         video_stream_index_reference,
                                                         video_stream_index_test);
-  // Process at most 10^5 frames for now.
-  const unsigned num_frames_to_process = std::min(num_common_frames, (unsigned) 100000);
+  const unsigned num_frames_to_process = num_common_frames;
   output.SetNumFramesToProcess(num_frames_to_process);
 
   // For computing the processing rate in FPS and finding the min and max vmaf scores.
