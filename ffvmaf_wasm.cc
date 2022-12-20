@@ -126,7 +126,7 @@ int ComputeVmaf(const std::string &reference_file,
   InitializeVmaf(vmaf, model, model_collection, &model_collection_count,
                  vmaf_model_buffer.GetBuffer(model_name),
                  vmaf_model_buffer.GetBufferSize(model_name), use_phone_model);
-  int compute_return_value = ComputeVmafForEachFrame(reference_file,
+  VmafComputeStatus compute_return_value = ComputeVmafForEachFrame(reference_file,
                           test_file,
                           display_frame_sws_context,
                           max_score_ref_frame,
@@ -156,7 +156,7 @@ int ComputeVmaf(const std::string &reference_file,
   free(model_collection);
 
   vmaf_close(vmaf);
-  return compute_return_value;
+  return static_cast<int>(compute_return_value);
 }
 
 // The functions below are exposed in the wasm module.

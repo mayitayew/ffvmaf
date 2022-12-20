@@ -8,6 +8,18 @@ extern "C" {
 #include "libswscale/swscale.h"
 }
 
+enum class VmafComputeStatus {
+  INITIALIZATION_ERROR = -1,
+  SUCCESS,
+  INPUT_VIDEO_ERROR,
+  CANCELLED,
+  VMAF_ERROR_COPYING_FRAMES,
+  VMAF_ERROR_READING_FRAMES,
+  VMAF_ERROR_COMPUTING_AT_INDEX,
+  VMAF_ERROR_FLUSHING_CONTEXT,
+  VMAF_ERROR_COMPUTING_POOLED,  // 7
+};
+
 int InitializeVmaf(VmafContext *vmaf,
                    VmafModel **model,
                    VmafModelCollection **model_collection,
@@ -16,7 +28,7 @@ int InitializeVmaf(VmafContext *vmaf,
                    uint64_t model_buffer_size,
                    bool use_phone_model);
 
-int ComputeVmafForEachFrame(const std::string &reference_file,
+VmafComputeStatus ComputeVmafForEachFrame(const std::string &reference_file,
                               const std::string &test_file,
                               SwsContext *display_frame_sws_context,
                               AVFrame *max_score_ref_frame,

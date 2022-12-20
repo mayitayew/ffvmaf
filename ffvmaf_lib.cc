@@ -200,6 +200,7 @@ static int AllocateFramesAndPackets(AVFrame *&pFrame_reference,
   return 0;
 }
 
+// Copies picture data from AVFrame (FFMPEG's frame abstraction) to VmafPicture (VMAF's frame abstraction).
 static int CopyPictureData(AVFrame *src, VmafPicture *dst, unsigned bpc) {
   int err = vmaf_picture_alloc(dst, VMAF_PIX_FMT_YUV420P, bpc,
                                src->width, src->height);
@@ -344,7 +345,7 @@ class OutputBuffer {
   float *buffer_;
 };
 
-int ComputeVmafForEachFrame(const std::string &reference_file,
+VmafComputeStatus ComputeVmafForEachFrame(const std::string &reference_file,
                               const std::string &test_file,
                               SwsContext *display_frame_sws_context,
                               AVFrame *max_score_ref_frame,
@@ -364,19 +365,19 @@ int ComputeVmafForEachFrame(const std::string &reference_file,
   AVFormatContext *pFormatContext_test = avformat_alloc_context();
   if (!pFormatContext_reference || !pFormatContext_test) {
     fprintf(stderr, "ERROR could not allocate memory for format contexts\n");
-    return 1;
+    return VmafComputeStatus::INPUT_VIDEO_ERROR;
   }
 
   if (avformat_open_input(&pFormatContext_reference, reference_file.c_str(), NULL, NULL) != 0
       || avformat_open_input(&pFormatContext_test, test_file.c_str(), NULL, NULL) != 0) {
     fprintf(stderr, "ERROR could not open file.\n");
-    return 1;
+    return VmafComputeStatus::INPUT_VIDEO_ERROR;
   }
 
   if (avformat_find_stream_info(pFormatContext_reference, NULL) < 0
       || avformat_find_stream_info(pFormatContext_test, NULL) < 0) {
     printf("ERROR could not get the stream info\n");
-    return 1;
+    return VmafComputeStatus::INPUT_VIDEO_ERROR;
   }
 
   // Declare the various local variables. Those allocated on heap must be free before this function returns.
@@ -416,7 +417,7 @@ int ComputeVmafForEachFrame(const std::string &reference_file,
     if (pLocalCodecParameters->codec_type == AVMEDIA_TYPE_VIDEO) {
       if (!IsHDResolution(pLocalCodecParameters)) {
         if (AllocateHDFrame(pLocalCodecParameters, reference_sws_context, scaled_pFrame_reference) != 0) {
-          return 1;
+          return VmafComputeStatus::INITIALIZATION_ERROR;
         }
       }
       video_stream_index_reference = i;
@@ -444,7 +445,7 @@ int ComputeVmafForEachFrame(const std::string &reference_file,
     if (pLocalCodecParameters->codec_type == AVMEDIA_TYPE_VIDEO) {
       if (!IsHDResolution(pLocalCodecParameters)) {
         if (AllocateHDFrame(pLocalCodecParameters, test_sws_context, scaled_pFrame_test) != 0) {
-          return 1;
+          return VmafComputeStatus::INITIALIZATION_ERROR;
         }
       }
       video_stream_index_test = i;
@@ -464,7 +465,7 @@ int ComputeVmafForEachFrame(const std::string &reference_file,
                   pPacket_test,
                   scaled_pFrame_reference,
                   scaled_pFrame_test);
-    return 1;
+    return VmafComputeStatus::INITIALIZATION_ERROR;
   }
 
   // Return if a video stream was not found for one or both videos. Free the initialized resources before returning.
@@ -480,7 +481,7 @@ int ComputeVmafForEachFrame(const std::string &reference_file,
                   pPacket_test,
                   scaled_pFrame_reference,
                   scaled_pFrame_test);
-    return 1;
+    return VmafComputeStatus::INPUT_VIDEO_ERROR;
   }
 
   // Prepare the codec contexts for decoding the videos. Return and free resources if there is an error.
@@ -502,7 +503,7 @@ int ComputeVmafForEachFrame(const std::string &reference_file,
                   scaled_pFrame_test,
                   pCodecContext_reference,
                   pCodecContext_test);
-    return 1;
+    return VmafComputeStatus::INITIALIZATION_ERROR;
   }
 
   const unsigned num_common_frames = GetNumCommonFrames(pFormatContext_reference,
@@ -536,7 +537,7 @@ int ComputeVmafForEachFrame(const std::string &reference_file,
                     scaled_pFrame_test,
                     pCodecContext_reference,
                     pCodecContext_test);
-      return 2;  // cancelled
+      return VmafComputeStatus::CANCELLED;
     }
 
     bool reference_frame_decoded =
@@ -573,7 +574,7 @@ int ComputeVmafForEachFrame(const std::string &reference_file,
           vmaf_picture_unref(&reference_vmaf_picture);
         if (ret1)
           vmaf_picture_unref(&test_vmaf_picture);
-        return 3; // Error during vmaf
+        return VmafComputeStatus::VMAF_ERROR_COPYING_FRAMES;
       }
 
       if (vmaf_read_pictures(vmaf, &reference_vmaf_picture, &test_vmaf_picture, frame_index) != 0) {
@@ -590,7 +591,7 @@ int ComputeVmafForEachFrame(const std::string &reference_file,
                       scaled_pFrame_test,
                       pCodecContext_reference,
                       pCodecContext_test);
-        return 3; // Error during vmaf
+        return VmafComputeStatus::VMAF_ERROR_READING_FRAMES;
       }
 
       // Compute the vmaf score at index - 2.
@@ -612,7 +613,7 @@ int ComputeVmafForEachFrame(const std::string &reference_file,
                         scaled_pFrame_test,
                         pCodecContext_reference,
                         pCodecContext_test);
-          return 3;
+          return VmafComputeStatus::VMAF_ERROR_COMPUTING_AT_INDEX;
         }
         output.SetVmafScore(frame_index_for_vmaf, vmaf_score);
       }
@@ -665,11 +666,8 @@ int ComputeVmafForEachFrame(const std::string &reference_file,
   output.SetMaxVmafScore(max_vmaf_score);
   output.SetMinVmafScore(min_vmaf_score);
 
-  // Flush the VMAF context and compute the pooled VMAF score.
-  double pooled_vmaf_score = 0;
-  if (vmaf_read_pictures(vmaf, NULL, NULL, 0) != 0
-      || vmaf_score_pooled(vmaf, model, VMAF_POOL_METHOD_MEAN, &pooled_vmaf_score, 0, frame_index - 2) != 0) {
-    fprintf(stderr, "Problem flushing VMAF context.\n");
+  // Flush the VMAF context.
+  if (vmaf_read_pictures(vmaf, NULL, NULL, 0) != 0) {
     FreeResources(pFormatContext_reference,
                   pFormatContext_test,
                   reference_sws_context,
@@ -682,10 +680,27 @@ int ComputeVmafForEachFrame(const std::string &reference_file,
                   scaled_pFrame_test,
                   pCodecContext_reference,
                   pCodecContext_test);
-    return 3;
+    return VmafComputeStatus::VMAF_ERROR_FLUSHING_CONTEXT;
   }
 
-  printf("Pooled VMAF score: %f\n", pooled_vmaf_score);
+  // Compute the pooled vmaf score.
+  double pooled_vmaf_score = 0;
+  if (vmaf_score_pooled(vmaf, model, VMAF_POOL_METHOD_MEAN, &pooled_vmaf_score, 0, frame_index - 2) != 0) {
+    FreeResources(pFormatContext_reference,
+                  pFormatContext_test,
+                  reference_sws_context,
+                  test_sws_context,
+                  pFrame_reference,
+                  pFrame_test,
+                  pPacket_reference,
+                  pPacket_test,
+                  scaled_pFrame_reference,
+                  scaled_pFrame_test,
+                  pCodecContext_reference,
+                  pCodecContext_test);
+    return VmafComputeStatus::VMAF_ERROR_COMPUTING_POOLED;
+  }
+
   output.SetPooledVmafScore(pooled_vmaf_score);
   FreeResources(pFormatContext_reference,
                 pFormatContext_test,
@@ -699,5 +714,5 @@ int ComputeVmafForEachFrame(const std::string &reference_file,
                 scaled_pFrame_test,
                 pCodecContext_reference,
                 pCodecContext_test);
-  return 0;
+  return VmafComputeStatus::SUCCESS;
 }
